@@ -56,8 +56,8 @@
 (def cloud (kernel/task :type "time" :update-time 1000 :name "cloud" :function cloud-function :produces "clouddata" 
                          :consumes #{:agent-one-data :agent-two-data :agent-three-data :agent-four-data :agent-five-data}))
 
-(set-agent-ip "10.42.43.3")
-(init-monitor)
+;(set-agent-ip "10.42.43.3")
+;(init-monitor)
 
 (defn get-chart-data
   "Graphs the congestion over time"
