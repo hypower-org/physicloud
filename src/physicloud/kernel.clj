@@ -1,7 +1,7 @@
 (ns physicloud.kernel
   (:require [lamina.core :as lamina]
             [physicloud.task :as core]
-            [physicloud.networking :as net]
+            [physicloud-tests.newnetworking :as net]
             [rhizome.viz :as rhizome])
   (:import [lamina.core.channel Channel]))
 
@@ -49,7 +49,7 @@
     
     (contains? @task-list name)
     
-    (println "An task with that name already exists!")
+    (println "A task with that name already exists!")
     
     (not type)
     
@@ -72,51 +72,53 @@
         (if init
           (swap! (:state a) merge init))
         (swap! task-list assoc name a)      
-        (let [channel-list (merge @net/internal-channel-list @net/external-channel-list)]        
-          (if (:produces a)
-            (if (empty? (:consumes a))
-              (do
-                (if auto-establish 
-                  (net/channel-factory (keyword (gensym)) (:produces a)))
-                (core/add-outbound a (get-in (merge @net/internal-channel-list @net/external-channel-list) [(:produces a)]))
-                (core/schedule-task a (fn [] (time+ ch (core/produce a))) update-time 0))
+        (when auto-establish
+          (let [channel-list (merge @net/internal-channel-list @net/external-channel-list)]   
+            (if (:produces a)
+              (if (empty? (:consumes a))
               
-              (.execute core/exec 
+                (do
+                  (net/channel-factory (keyword (gensym)) (:produces a))
+                  (core/add-outbound a (get-in (merge @net/internal-channel-list @net/external-channel-list) [(:produces a)]))
+                  (core/schedule-task a (fn [] (time+ ch (core/produce a))) update-time 0))
+              
+                  (.execute core/exec 
                 
-                (fn [] 
-                  (loop []
-                    (net/genchan a :listen-time listen-time)
-                    (if (let [all-depedencies (doall (map #(contains? (merge @net/internal-channel-list @net/external-channel-list) %) (:consumes a)))]
-                          (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
-                      (do
-                        (net/channel-factory (keyword (gensym)) (:produces a))
-                        (core/add-outbound a (get-in (merge @net/internal-channel-list @net/external-channel-list) [(:produces a)]))
-                        (doseq [c (:consumes a)]
-                          (core/attach a (get-in (merge @net/internal-channel-list @net/external-channel-list) [c])))
-                        (core/schedule-task a (fn [] (time+ ch (core/produce a))) update-time 0))
-                      (recur))))))
+                    (fn [] 
+                      (loop []
+                        (net/genchan a :listen-time listen-time)
+                        (if (let [all-depedencies (doall (map #(contains? (merge @net/internal-channel-list @net/external-channel-list) %) (:consumes a)))]
+                              (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
+                          (do
+                            (net/channel-factory (keyword (gensym)) (:produces a))
+                            (core/add-outbound a (get-in (merge @net/internal-channel-list @net/external-channel-list) [(:produces a)]))
+                            (doseq [c (:consumes a)]
+                              (core/attach a (get-in (merge @net/internal-channel-list @net/external-channel-list) [c])))
+                            (core/schedule-task a (fn [] (time+ ch (core/produce a))) update-time 0))
+                          (recur))))))
             
-            (if (empty? (:consumes a))                                                                   
-              (core/schedule-task a (fn [] (time+ ch ((:function a) a))) update-time 0)
+              (if (empty? (:consumes a))                                                                  
+                (core/schedule-task a (fn [] (time+ ch ((:function a) a))) update-time 0)
               
-              (.execute core/exec
+                (.execute core/exec
                 
-                (fn []
-                  (loop []
-                    (net/genchan a :listen-time listen-time)
-                    (if (let [all-depedencies (doall (map #(contains? (merge @net/internal-channel-list @net/external-channel-list) %) (:consumes a)))]
-                          (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
-                      (do
-                        (doseq [c (:consumes a)]
-                          (core/attach a (get-in (merge @net/internal-channel-list @net/external-channel-list) [c])))
-                        (core/schedule-task a (fn [] (time+ ch ((:function a) a))) update-time 0))
-                      (recur)))))))
-          a))
+                  (fn []
+                    (loop []
+                      (net/genchan a :listen-time listen-time)
+                      (if (let [all-depedencies (doall (map #(contains? (merge @net/internal-channel-list @net/external-channel-list) %) (:consumes a)))]
+                            (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
+                        (do
+                          (doseq [c (:consumes a)]
+                            (core/attach a (get-in (merge @net/internal-channel-list @net/external-channel-list) [c])))
+                          (core/schedule-task a (fn [] (time+ ch ((:function a) a))) update-time 0))
+                        (recur)))))))))
+        
+        a)
       (println "No update time supplied"))
     
     (= type "event")
     
-    
+  
     (let [a (core/task-factory opts) 
           ch (:channel a)] 
       
@@ -142,6 +144,11 @@
                     (core/add-outbound a (get-in (merge @net/internal-channel-list @net/external-channel-list) [(:produces a)]))))
                 (recur))))))
       a)))
+
+(defn kill-task
+  [task]
+  (core/obliterate task)
+  (swap! task-list dissoc (:name task)))
 
 (defmacro defn+
   "Defines the passed function (a la defn) and records the function's code in its (the function's) meta data."

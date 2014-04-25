@@ -1,5 +1,8 @@
 (ns physicloud.statemachine)
 
+
+;Currently under development!!
+
 (declare parse-state-machine)
 
 (defmulti parse-state-item (fn [form ctx env]
@@ -12,6 +15,7 @@
 (defmethod parse-state-item :seq
   [form ctx env]
   (let [form (macroexpand form)]
+    (println "SEQ: " form)
     (parse-state-machine form ctx env)))
 
 (defmethod parse-state-item :vec
@@ -24,8 +28,6 @@
   (if (contains? env form)
     (get env form)
     (let [rs (resolve form)]
-      (println (meta form))
-      (println rs)
       (if rs
         (var-get rs)
         form))))
@@ -53,7 +55,10 @@
   (if (contains? @ctx identifier)
     (throw (IllegalArgumentException. "States must have unique identifiers!")))
   (swap! ctx assoc identifier (atom {}))
-  (let [state (doall (map (fn [x] (parse-state-item x (get-in @ctx [identifier]) env)) body))]
+  (println _ " " identifier " " body)
+  (let [state
+        (doall (map (fn [x] (parse-state-item x (get-in @ctx [identifier]) env)) body))
+        ]
     {:type :state
      :identifier identifier
      :body state}))
@@ -72,6 +77,7 @@
 
 (defmethod parse-state-machine 'fsm
   [[_ & states] ctx env]
+  (println states)
     {:type :state-machine
      :states (doall (map (fn [x] (parse-state-item x ctx env)) states))})
 
@@ -105,6 +111,16 @@
      (parse-state-machine (cons '~'fsm (macroexpand '~code)) context# (if-not (empty? '~(keys &env)) (zipmap (into [] '~(keys &env)) (conj [] ~@(keys &env)))))
      ;@context#
      ))
+
+(defmacro state-machine-test
+  [& code]
+  (parse-state-machine (cons 'fsm code) (atom {}) {}))
+
+;(parse-state-machine '(fsm
+;                        (state :A (active (println 1))
+;                               (next-state :B))
+;                        (state :B (active (println 1))
+;                               (next-state :done))) (atom {}) {})
 
 (defn empty-string
   [length]
@@ -293,22 +309,17 @@
 
 (defrecord MyRecord [a b])
 
-(defn test-fn
-  [test-val]
-  
-  (let [test-record (->MyRecord 1 (atom 2))]
-    (run-machine
-      (->StateMachine
-        (state-machine
-          (state :A (active (println test-val))
-                 (next-state :B))
-          (state :B (active (println (:b test-record)))
-                 (next-state :done))) (atom :A)))))
-
-
-
-
-
+;(defn test-fn
+;  [test-val]
+;  
+;  (let [test-record (->MyRecord 1 (atom 2))]
+;    (run-machine
+;      (->StateMachine
+;        (state-machine
+;          (state :A (active (println test-val))
+;                 (next-state :B))
+;          (state :B (active (println (:b test-record)))
+;                 (next-state :done))) (atom :A)))))
 
 
 

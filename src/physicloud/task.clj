@@ -7,8 +7,8 @@
 
 (set! *warn-on-reflection* true)
 
-(def ^{:private true} tasks (atom {}))
-(def ^ScheduledThreadPoolExecutor exec (Executors/newScheduledThreadPool (.availableProcessors (Runtime/getRuntime))));Set to four for the ARM cores
+(def tasks (atom {}))
+(def ^ScheduledThreadPoolExecutor exec (Executors/newScheduledThreadPool (.availableProcessors (Runtime/getRuntime))))
 
 (declare mutate)
 (declare obliterate)

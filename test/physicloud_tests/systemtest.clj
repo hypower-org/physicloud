@@ -3,7 +3,7 @@
             [physicloud.kernel :as kernel]
             [physicloud.task :as core]
             [physicloud-tests.mattsalgorithm :as cdc])
-  (:use [physicloud.networking]
+  (:use [physicloud-tests.newnetworking]
         [incanter.stats]
         [incanter.charts]
         [incanter.core]))
