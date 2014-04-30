@@ -299,21 +299,22 @@ if any, is already hosting a server"
         (reset! server-ip (get-in @ip-list [k]))
         (reset! found true)
         (println "Server found")
-        (tcp-client network-in-channel network-out-channel (get-in @ip-list [k]) 8999 :on-close (fn [] (deliver p true))))
+        (tcp-client network-in-channel network-out-channel (get-in @ip-list [k]) 8998 :on-close (fn [] (deliver p true)))
+        @p)
       
       (when (not @found)
         (if (= (first agent-ips) ip)
           
           (do 
             (println "No server found. Establishing server...")
-            (tcp-server 8999)
+            (tcp-server 8998)
             (reset! server-ip ip)
-            (tcp-client network-in-channel network-out-channel "127.0.0.1" 8999 :on-close (fn [] (deliver p true))))
+            (tcp-client network-in-channel network-out-channel "127.0.0.1" 8998 :on-close (fn [] (deliver p true))))
           
           (do
             (reset! server-ip (first agent-ips))
             (println "Connecting to: " @server-ip)
-            (tcp-client network-in-channel network-out-channel @server-ip 8999 :on-close (fn [] (deliver p true)))))
+            (tcp-client network-in-channel network-out-channel @server-ip 8998 :on-close (fn [] (deliver p true)))))
         
       @p))))
 
@@ -326,7 +327,7 @@ if any, is already hosting a server"
 (defn set-agent-ip
   "Set the ip of the agent PhysiCloud is running on"
   [new-ip]
-  (alter-var-root #'physicloud-tests.newnetworking/ip (fn [x] "10.42.43.3")))
+  (alter-var-root #'physicloud-tests.newnetworking/ip (fn [x] new-ip)))
 
 (defn init-monitor
   "When called, will initailize the monitor"
@@ -391,6 +392,7 @@ if any, is already hosting a server"
         
         
         (= code REQUEST-BENCHMARK)
+        
         (do
           (println (second payload))
           (lamina/enqueue network-out-channel (str (first payload)"|"{ip (c/benchmark-task (second payload))})))))))
