@@ -33,9 +33,9 @@
 
 (def cloud-channel (channel-factory (keyword (gensym)) :clouddata))
   
-(def cloud-agent-one (kernel/task :type "time" :update-time 5 :name "cloud-agent-one" :function cloud-agent 
-                            :produces "agent-one-data" :consumes #{:clouddata}
-                            :init {:x [0 0 0 0 0] :y [0 0 0 0 0] :control [3 3 3 3] :number 0}))
+;(def cloud-agent-one (kernel/task :type "time" :update-time 5 :name "cloud-agent-one" :function cloud-agent 
+;                            :produces "agent-one-data" :consumes #{:clouddata}
+;                            :init {:x [0 0 0 0 0] :y [0 0 0 0 0] :control [3 3 3 3] :number 0}))
 
 (def cloud-agent-two (kernel/task :type "time" :update-time 500 :name "cloud-agent-two" :function cloud-agent 
                             :produces "agent-two-data" :consumes #{:clouddata}
