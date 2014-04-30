@@ -485,9 +485,6 @@ if any, is already hosting a server"
     (remove-channel ch)
     
     @data))
-  
-(set-agent-ip "10.42.43.3")
-(init-monitor)
     
 
 

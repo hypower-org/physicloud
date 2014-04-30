@@ -89,3 +89,6 @@
             (set-stroke :width 2 :dash 10 :dataset 5)
             (view))
           nil)))))
+
+(set-agent-ip "10.42.43.3")
+(init-monitor)
