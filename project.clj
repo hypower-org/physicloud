@@ -16,4 +16,5 @@
                  [net.async/async "0.1.0"]
                  [incanter/incanter-charts "1.5.4"]
                  [incanter "1.5.4"]
-                 [incanter/incanter-pdf "1.5.4"]])
+                 [incanter/incanter-pdf "1.5.4"]
+                 [clojure-lanterna "0.9.4"]])

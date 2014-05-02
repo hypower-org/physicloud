@@ -493,7 +493,7 @@
       (do 
         (if (contains-cb this (combine-name name (:name (meta channel))))
           (println (str name) " already attached!")
-          (add-cb this #(if (map? %) (function this %)) channel (combine-name name (:name (meta channel))))))    
+          (add-cb this (fn [x] (if (map? x) (function this x))) channel (combine-name name (:name (meta channel))))))    
       (println "Invalid channel attachment from "(str name) " to " (:data (meta channel))))
     this)
   
@@ -680,13 +680,13 @@
         (println "An event task must consume data")
         (if (empty? (:produces task-config-map))
           (EventTaskC. (atom {})
-                        (with-meta #(task-error-handler EventTaskC %1 ((:function task-config-map) %2)) (meta (:function task-config-map)))
+                        (with-meta #(task-error-handler EventTaskC %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
                         (:name task-config-map)
                         ch 
                         (:type task-config-map)
                         (:consumes task-config-map))
           (EventTaskCP. (atom {}) (atom #{}) 
-                         (with-meta #(task-error-handler EventTaskCP %1 ((:function task-config-map) %2)) (meta (:function task-config-map)))
+                         (with-meta #(task-error-handler EventTaskCP %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
                          (:name task-config-map)
                          ch 
                          (:type task-config-map)

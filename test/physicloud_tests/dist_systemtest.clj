@@ -26,5 +26,5 @@
                             :init {:x [0 0 0 0 0] :y [0 0 0 0 0] :control [3 3 3 3] :number 0}))
 
 
-(set-agent-ip "10.42.43.4")
+(set-agent-ip "10.42.43.3")
 (init-monitor)
