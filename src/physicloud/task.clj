@@ -3,7 +3,8 @@
   (:import [java.util.concurrent TimeUnit]
            [java.util.concurrent Executors]
            [java.util.concurrent ScheduledThreadPoolExecutor]
-           [lamina.core.channel Channel]))
+           [lamina.core.channel Channel]
+           java.io.Writer))
 
 (set! *warn-on-reflection* true)
 
@@ -675,16 +676,18 @@
                 (:type task-config-map)
                 (:consumes task-config-map)
                 (keyword (:produces task-config-map))))
-              
+              ;i-channels function name ^Channel channel ^String type consumes
       (if (empty? (:consumes task-config-map))
         (println "An event task must consume data")
         (if (empty? (:produces task-config-map))
-          (EventTaskC. (atom {})
-                        (with-meta #(task-error-handler EventTaskC %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
-                        (:name task-config-map)
-                        ch 
-                        (:type task-config-map)
-                        (:consumes task-config-map))
+          (let [t (EventTaskC. (atom {})
+                            (with-meta #(task-error-handler EventTaskC %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
+                            (:name task-config-map)
+                            ch 
+                            (:type task-config-map)
+                            (:consumes task-config-map))]
+            (with-meta t {:type ::event-task-consumer
+                          ::source (fn [] {:function (:function t) :name (:name t) :consumes (:consumes t)})}))
           (EventTaskCP. (atom {}) (atom #{}) 
                          (with-meta #(task-error-handler EventTaskCP %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
                          (:name task-config-map)
@@ -692,3 +695,7 @@
                          (:type task-config-map)
                          (:consumes task-config-map)
                          (keyword (:produces task-config-map))))))))
+
+(defmethod print-method ::event-task-consumer [o ^Writer w]
+  (print-method ((::source (meta o))) w))
+

@@ -34,7 +34,7 @@
 (defn atom
   [val]
   (let [pre (clojure.core/atom val :meta {:type ::serializable-atom
-                                    ::source 1})]
+                                    ::source val})]
       (alter-meta! pre (fn [x] {::source (list 'atom @pre) :type ::serializable-atom}))
       pre))
 
