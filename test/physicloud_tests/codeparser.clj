@@ -1,4 +1,4 @@
-(ns physicloud-test.codeparser
+(ns physicloud-tests.codeparser
   (:require [physicloud-tests.sfn :as s]))
 
 (declare parse-item)
@@ -20,9 +20,9 @@
       
       (if (empty? binding)
         
-        [end-bindings env]
+        [end-bindings (merge env (reduce merge (map (fn [x] {(symbol x) x}) (take-nth 2 bindings))))]
         
-        (let [fb (first binding) 
+        (let [fb (first single-binding) 
               
               parsed (parse-item (second single-binding) ctx env)]
           
@@ -52,7 +52,7 @@
 (defmethod parse-expr 'let*
   [[_ bindings & body] ctx env]
   (let [new-bindings (gen-let-bindings bindings ctx env)]
-    (list _ (first new-bindings) (doall (map (fn [x] (parse-item x ctx (second bindings))) body)))))
+    (cons _ (cons (first new-bindings) (doall (map (fn [x] (parse-item x ctx (second new-bindings))) body))))))
 
 (defmethod parse-expr 'if
   [[_ test then else] ctx env]
@@ -83,7 +83,7 @@
 (defmethod parse-item :symbol
   [form ctx env]
   
-  (println "CURRENT ENV: " env)
+  (println env)
   
   (let [pos (get env form)]
     
@@ -94,9 +94,8 @@
         (= (type pos) :physicloud-tests.sfn/serializable-fn)
         
         (do
-          (parse-item (seq (read-string (pr-str pos))) ctx env))
-          
-          
+          (parse-item (seq (read-string (pr-str pos))) ctx env))         
+        
         (= (type pos) :physicloud-tests.sfn/serializable-atom)
                  
         (parse-item (seq (read-string (pr-str pos))) ctx env)
@@ -119,7 +118,7 @@
                  
               (parse-item (seq (read-string (pr-str v))) ctx env)
               
-              (fn? v)
+              (or (fn? v) :physicloudtest.agentcore/cyber-physical-unit)
               
               form
               
@@ -153,12 +152,13 @@
 (defn+ dot-product
   [x y]
   (let [a [(rest a) a] c (rest a)]
-    (reduce + (mapv (fn [v1 v2] (* v1 v2)) c c)))
+    (reduce + (* a c)))
   (if (= 1 2)
     a
     b))
 
-(expand-all dot-product)
+(let [a 1]
+  (expand-all dot-product))
 
 (defn+ cloud-agent
   [this]

@@ -4,7 +4,7 @@
   (:import java.io.Writer))
 
 
-;This is the original form of the save-env macro from github.com/technomancy/serializable-fn/
+;This is the original form of the save-env fn from github.com/technomancy/serializable-fn/
 
 ;(defn- save-env [locals form]
 ;  (let [form (with-meta (cons 'fn (rest form)) ; serializable/fn, not core/fn
