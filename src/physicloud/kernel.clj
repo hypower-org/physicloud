@@ -1,7 +1,7 @@
 (ns physicloud.kernel
   (:require [lamina.core :as lamina]
             [physicloud.task :as core]
-            [physicloud-tests.newnetworking :as net]
+            [physicloud.networking :as net]
             [rhizome.viz :as rhizome])
   (:import [lamina.core.channel Channel]))
 

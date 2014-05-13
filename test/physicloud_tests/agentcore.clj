@@ -1,6 +1,6 @@
 (ns physicloudtest.agentcore
   (:require [lamina.core :as lamina]
-            ;[aleph.udp :as aleph-udp]
+            [aleph.udp :as aleph-udp]
             [gloss.core :as gloss]
             [aleph.tcp :as aleph]
             [lanterna.terminal :as t]
@@ -43,10 +43,15 @@
 
 (def START-SERVER 0)
 (def STOP-SERVER 1)
-(def START-CLIENT 2)
-(def STOP-CLIENT 3)
+(def START-TCP-CLIENT 2)
+(def STOP-TCP-CLIENT 3)
 (def LOCK-GC 4)
 (def UNLOCK-GC 5)
+(def START-UDP-CLIENT 6)
+(def STOP-UDP-CLIENT 7)
+(def UDP-BROADCAST 8)
+
+;Declares for cyclic coding
 
 (declare temporary-channel)
 (declare remove-channel)
@@ -55,13 +60,15 @@
 (declare internal-channel)
 (declare ping-channel)
 (declare parse-item)
-
-(defmacro expand-all [form]
-  `(pr-str (parse-item '~form nil (if-not (empty? '~(keys &env)) (zipmap (into [] '~(keys &env)) (conj [] ~@(keys &env)))))))
+(declare wait-for-lock)
+(declare unlock)
 
 (defmacro on-pool
+  "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
   [^ScheduledThreadPoolExecutor pool & code]
   `(.execute ~pool (fn [] (try ~@code (catch Exception e# (println (str "caught exception: \"" (.getMessage e#) (.getStackTrace e#))))))))
+
+;Server messages are delmited by | 
 
 (defprotocol IClientHandler
   (subscribe [this channel-name] "Adds a subcribtion to a logical channel.  Handled by the server")
@@ -133,8 +140,10 @@
           (write-to-terminal code " -> " payload " -> " @(get @channel-list (keyword code)))
           (when-let [c-list (get @channel-list (keyword code))]
             (doseq [i (keys @c-list)]
-              (if (= (lamina/enqueue i msg) :lamina/closed!)
-                (swap! c-list dissoc i)))))))))
+              (when (= (lamina/enqueue i msg) :lamina/closed!)
+                (swap! c-list dissoc i)
+                (if (empty? c-list)
+                  (swap! channel-list dissoc (keyword code)))))))))))
 
 (defprotocol ITCPServer
   (tcp-client-handler [this channel client-info] "The handler for a connected TCP client")
@@ -224,7 +233,6 @@
 (defn genchan
   "Finds a channel with the given data-type.  Will look over the network for it."
   [unit data & {:keys [listen-time] :or {listen-time 100}}]
-  (with-gc-locking unit
     (let [channel-list (merge @(:external-channel-list unit) @(:internal-channel-list unit))]
     
       (cond 
@@ -276,22 +284,24 @@
                       
               (send-net unit (package "kernel" [chosen ch-name (:ip unit)]))
               ch)        
-            :failed))))))
+            :failed)))))
 
 ;TEST######################################################
 
 (defmacro task
-  [unit {:keys [function produces update-time name] :as opts}]
+  [unit {:keys [function produces update-time name auto-establish without-locking] :as opts}]
   (let [opts# (merge opts {:name (if name name (str (gensym "task_")))})
         
         args# (second function)]
     `(test-task ~unit {:function (s/fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
-                    :consumes ~(set (doall (map keyword (rest args#))))
-                    :produces ~produces
-                    :name ~(:name opts#)
-                    :update-time ~update-time
-                    :type (if ~update-time "time" "event")
-                    })))
+                       :consumes ~(set (doall (map keyword (rest args#))))
+                       :produces ~produces
+                       :name ~(:name opts#)
+                       :update-time ~update-time
+                       :type (if ~update-time "time" "event")
+                       :listen-time 1000
+                       :auto-establish (if (= ~auto-establish false) false true)
+                       :without-locking ~without-locking})))
 
 (defn test-task
   
@@ -319,8 +329,10 @@
              :init {:data-type-1 [0 0 0] :data-type-2 [1 2 3]}
              :listen-time 1000)"
   
-  [unit {:keys [type update-time name function produces auto-establish init listen-time] :as opts
+  [unit {:keys [type update-time name function produces auto-establish init listen-time without-locking] :as opts
          :or {auto-establish true listen-time 1000}}]
+  
+  (println opts)
 
   (let [task-list (:task-list unit) internal-channel-list (:internal-channel-list unit) external-channel-list (:external-channel-list unit)]  
   
@@ -358,36 +370,49 @@
                     (core/schedule-task a update-time 0))
               
                     (on-pool core/exec
-                      (loop []
-                        (with-gc-locking unit
-                          (doseq [i (:consumes a)]
-                            (genchan i :listen-time listen-time))
-                          (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
-                                (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
-                            (do
-                              (internal-channel unit (keyword (gensym)) (:produces a))
-                              (core/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
-                              (doseq [c (:consumes a)]
-                                (core/attach a (c (merge @internal-channel-list @external-channel-list))))
-                              (core/schedule-task a update-time 0))
-                            (recur))))))
+                             (loop []
+                               (if-not without-locking
+                                 (wait-for-lock unit))
+                               (doseq [i (:consumes a)]
+                                 (genchan i :listen-time listen-time))
+                               (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
+                                     (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
+                                 (do
+                                   (internal-channel unit (keyword (gensym)) (:produces a))
+                                   (core/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
+                                   (doseq [c (:consumes a)]
+                                     (core/attach a (c (merge @internal-channel-list @external-channel-list))))
+                                   (core/schedule-task a update-time 0)
+                                   (if-not without-locking
+                                     (unlock unit)))
+                                 (do
+                                   (if-not without-locking
+                                     (unlock unit))
+                                   (recur))))))
             
                 (if (empty? (:consumes a))          
                   
                   (core/schedule-task a update-time 0)
               
                   (on-pool core/exec
-                    (loop []
-                      (with-gc-locking unit
-                        (doseq [i (:consumes a)]
-                          (genchan i :listen-time listen-time))
-                        (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
-                              (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
-                          (do
-                            (doseq [c (:consumes a)]
-                              (core/attach a (c (merge @internal-channel-list @external-channel-list))))
-                            (core/schedule-task a update-time 0))
-                          (recur)))))))))
+                           (loop []
+                             (if-not without-locking
+                               (wait-for-lock unit))
+                               (doseq [i (:consumes a)]
+		                               (genchan i :listen-time listen-time))
+                               (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
+                                     (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
+                                 (do
+                                   (doseq [c (:consumes a)]
+                                     (core/attach a (c (merge @internal-channel-list @external-channel-list))))
+                                   (core/schedule-task a update-time 0)
+                                   (if-not without-locking
+                                     (unlock unit))
+                                   )
+                                 (do
+                                   (if-not without-locking
+                                     (unlock unit))
+                                   (recur)))))))))
         
           a)
         (println "No update time supplied"))
@@ -402,28 +427,32 @@
           (swap! (:state a) merge init))
       
         (swap! task-list assoc name a)        
-        
-        (println (:consumes a))
-        (println (:produces a))
       
         (if auto-establish        
                  
           (on-pool core/exec     
             (loop []
-              (with-gc-locking unit
+              (when-not without-locking
+                (println "LOCKING FROM TASK")
+                (wait-for-lock unit))
                 (doseq [i (:consumes a)]
                   (genchan unit i :listen-time listen-time))
                 (if (let [all-depedencies (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a))]
                       (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                   (do
                     (doseq [c (:consumes a)]     
-                      (println c)
-                      (println (c (merge @internal-channel-list @external-channel-list)))
                       (core/attach a (c (merge @internal-channel-list @external-channel-list))))
                     (when (:produces a)
                       (internal-channel unit (keyword (gensym)) (:produces a))
-                      (core/add-outbound a ((:produces a) (merge @internal-channel-list @external-channel-list)))))
-                  (recur))))))
+                      (core/add-outbound a ((:produces a) (merge @internal-channel-list @external-channel-list))))
+                    (when-not without-locking
+                      (println "UNLOCKING FROM TASK")
+                      (unlock unit)))
+                  (do
+                   (when-not without-locking
+                      (println "UNLOCKING FROM TASK")
+                      (unlock unit))
+                    (recur))))))
         a))))
 
 ;TEST######################################################
@@ -437,13 +466,13 @@
                    (recur (dec i))
                    false))))
 
-(defn ^{:private true} garbage-collect 
+(defn garbage-collect 
   [unit]
   (let [ch-list @(:total-channel-list unit)]
     (println "COLLECTING")
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
-        (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel))
+        (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
           (if-not (vec-contains (keys (reduce merge (map (fn [x] (merge (let [v (:input x)] (if v @v {})) (let [v (:output x)] (if v @v {})))) (vals @(:task-list unit)))))
                                 ch)
             (remove-channel unit ch)))))))
@@ -472,112 +501,177 @@
   
   (kill-task [_ task] "Removes a given task from memory and stops all of its functionality."))
 
-(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address alive ^Channel input-channel]
+(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive]
+
+ ICPUChannel
   
-  ICPUChannel
+ (temporary-channel
+   [_ name]
+ (if-not (contains? @total-channel-list name)
+   (let [^Channel ch (with-meta (lamina/permanent-channel) {:name name})]
+     (swap! total-channel-list assoc name ch)
+     ch)))
   
-  (temporary-channel
-    [_ name]
-  (if-not (contains? @total-channel-list name)
-    (let [^Channel ch (with-meta (lamina/permanent-channel) {:name name})]
-      (swap! total-channel-list assoc name ch)
-      ch)))
+ (internal-channel
+   [_ name data]
+   (if-not (or (contains? (merge @internal-channel-list @external-channel-list) data) (contains? @total-channel-list name))
+     (let [^Channel ch (lamina/permanent-channel) ch (with-meta ch (merge (meta ch) {:name name :data data}))]
+       (lamina/ground ch)
+       (swap! internal-channel-list assoc data ch)
+       (swap! total-channel-list assoc name ch)
+       ch)))
   
-  (internal-channel
-    [_ name data]
-    (if-not (or (contains? (merge @internal-channel-list @external-channel-list) data) (contains? @total-channel-list name))
-      (let [^Channel ch (lamina/permanent-channel) ch (with-meta ch (merge (meta ch) {:name name :data data}))]
-        (lamina/ground ch)
-        (swap! internal-channel-list assoc data ch)
-        (swap! total-channel-list assoc name ch)
-        ch)))
-  
-  (net-channel 
-    [_ name data]
-    (if-not (or (contains? (merge @internal-channel-list @external-channel-list) data) (contains? @total-channel-list name))
-      (let [^Channel ch (lamina/permanent-channel) ch (with-meta ch (merge (meta ch) {:name name :data data}))]
-        (swap! external-channel-list assoc data ch)
-        (swap! total-channel-list assoc name ch)
-        (send-net _ (package "subscribe" name))
-        ch)))  
+ (net-channel 
+   [_ name data]
+   (if-not (or (contains? (merge @internal-channel-list @external-channel-list) data) (contains? @total-channel-list name))
+     (let [^Channel ch (lamina/permanent-channel) ch (with-meta ch (merge (meta ch) {:name name :data data}))]
+       (swap! external-channel-list assoc data ch)
+       (swap! total-channel-list assoc name ch)
+       (send-net _ (package "subscribe" name))
+       ch)))  
     
-  (remove-channel
-    [_ channel]
-    (lamina/force-close channel)
-    (swap! internal-channel-list dissoc (:data (meta channel)))
-    (swap! internal-channel-list dissoc (:data (meta channel)))
-    (swap! total-channel-list dissoc (:name (meta channel)))
-    _)
+ (remove-channel
+   [_ channel]
+   (lamina/force-close channel)
+   (swap! internal-channel-list dissoc (:data (meta channel)))
+   (swap! internal-channel-list dissoc (:data (meta channel)))
+   (swap! total-channel-list dissoc (:name (meta channel)))
+   _)
   
-  ICPUUtil
+ ICPUUtil
   
-  (instruction
-    [_ message]
-    (let [ch (lamina/channel)]
-      (lamina/enqueue input-channel (conj message ch))
-      ch))
+ (instruction
+   [_ message]
+   (let [ch (lamina/channel)]
+     (lamina/enqueue (:input-channel @total-channel-list) (conj message ch))
+     ch))
   
-  (send-net
-    [_ message]
-    (lamina/enqueue (:network-out-channel @total-channel-list) message))
+ (send-net
+   [_ message]
+   (lamina/enqueue (:network-out-channel @total-channel-list) message))
   
-  (construct
-    [_ gc-fn]
-    (internal-channel _ :network-out-channel :network-out-data)
-    (swap! total-channel-list assoc :network-in-channel (async/chan (async/sliding-buffer 100))) 
+ (construct
+   [_ gc-fn]
+     
+   ;Inbound and outbound network channels
     
-    ;PROTOTYPE
-    (task _ 
-        {:type "time"
-        :name "garbage-collector"
-        :function (s/fn [this] (locking gc-fn (gc-fn _)))
-        :update-time 10000})
+   (internal-channel _ :network-out-channel :network-out-data)
+   (swap! total-channel-list assoc :network-in-channel (async/chan (async/sliding-buffer 100))) 
     
-    (lamina/receive-all input-channel
-                        (fn [x]
-                          (let [code (first x) payload (rest x)]
-                            
-                          (lamina/enqueue (last payload) 
+    
+   ;GARBAGE COLLECTOR
+    
+   (task _ 
+       {:name "garbage-collector"
+       :function (fn [this] (locking gc-fn (gc-fn _)))
+       :update-time 10000})
+    
+   ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
+   ; [INSTRUCTION-CODE ~~~OTHER-DATA~~~~]    
+    
+   (lamina/receive-all (internal-channel _ :input-channel :input-channel)
+                       (fn [x]
+                         (let [code (first x) payload (rest x)]                                                  
                                           
-                                          (cond
+                           (cond
                             
-                                            (= code START-SERVER)
+                             (= code START-SERVER)
                                             
-                                            (let [server (tcp-server (first payload))]
-                                              (lamina/receive-all input-channel
-                                                                  (fn [x]
-                                                                    (let [code (first x)]
-                                                                      (if (= code STOP-SERVER)
-                                                                        (kill server)))))
-                                              server)
-                                            
-                                            
-                                            (= code START-CLIENT)
-                                            
-                                            (let [client (tcp-client _ (first payload) (second payload))]
-                                              (lamina/receive-all input-channel
-                                                                  (fn [x]
-                                                                    (let [code (first x)]
-                                                                      (if (= code STOP-CLIENT)
-                                                                        (lamina/force-close client)))))
-                                              client)   
+                             (let [server (tcp-server (first payload))]
+                               (lamina/receive-all  (:input-channel @total-channel-list)
+                                                   (fn [x]
+                                                     (let [code (first x)]
+                                                       (if (= code STOP-SERVER)
+                                                         (kill server)))))
+                               
+                               (lamina/enqueue (last payload) server))
                                             
                                             
-                                            (= code LOCK-GC)
+                             (= code START-TCP-CLIENT)
                                             
-                                            (let [p (promise)]
-                                              (on-pool core/exec
-                                                       (locking gc-fn
-                                                         @p))
-                                              (lamina/receive-all input-channel 
-                                                                  (fn [x]                                                               
-                                                                    (let [code (first x)]
-                                                                      (if (= code UNLOCK-GC)
-                                                                        (deliver p true))))))
+                             (let [client (tcp-client _ (first payload) (second payload))]
+                               (lamina/receive-all  (:input-channel @total-channel-list)
+                                                   (fn [x]
+                                                     (let [code (first x)]
+                                                       (if (= code STOP-TCP-CLIENT)
+                                                         (lamina/force-close client)))))
+                               
+                               (lamina/enqueue (last payload) client))
                                             
-                                           :default
+                             (= code START-UDP-CLIENT)
+
+                             (let [^Channel udp-client-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port 8999 :frame (gloss/string :utf-8) :broadcast true}))
+                                                  
+                                   data (atom {})
+                                                  
+                                   cb (fn udp-client-actions
+                                        [^String message]
+                                        (println message)
+                                        (let [^String code (first (split (:message message) #"\s+")) ^String sender (:host message)]
+                                          (cond
+                                            (= code "hello?") (lamina/enqueue udp-client-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
+                                            (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
+                                              
+                               (lamina/receive-all udp-client-channel cb)                                                                                        
+                                              
+                               (let [broadcast-task (task _ {:name "udp-broadcast"
+                                                             :function (fn 
+                                                                         [this input-channel]
+                                                                                    
+                                                                         (when (= (first input-channel) UDP-BROADCAST)
+                                                                           
+                                                                           (println "UDP HYPEEEEE!")
+                                                                           
+                                                                           (reset! data {})
+                                                                                        
+                                                                           (let [intervals (second input-channel)
+                                                                                              
+                                                                                 interval-time (nth input-channel 2)]                                                                                          
+                                                                          
+                                                                               (loop [i intervals]
+                                                                                 (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})  
+                                                                                                  (reduce #(conj %1 (str "10.42.43." (str %2))) [] (range 1 10)))]
+                                                                                   (lamina/enqueue udp-client-channel msg))
+                                                                                 (Thread/sleep interval-time)
+                                                                                 (if (> i 0)
+                                                                                   (recur (dec i))
+                                                                                   (lamina/enqueue (nth input-channel 3) @data))))))})]
+                                 (println "AND NOW FOR THE STOP")
+                                              
+                                 (task _ {:name "stop-udp-broadcast"
+                                          :function (fn [this input-channel] 
+                                                      (println input-channel)
+                                                      (when (= (first input-channel) STOP-UDP-CLIENT)
+                                                        (println "STOPPING UDP CLIENT")
+                                                        (lamina/force-close udp-client-channel)
+                                                        (kill-task _ this)
+                                                        (kill-task _ broadcast-task)))})                                          
+                                              
+                                 (lamina/enqueue (last payload) udp-client-channel)))                                                 
+                                            
+                              (= code LOCK-GC)
+                                            
+                              (let [p (promise)]
+                                (on-pool core/exec
+                                         (locking gc-fn
+                                                  
+                                           (lamina/enqueue (last payload) :locked)
+                                                                                                                                                                 
+                                           (task _ {:name "gc-lock"
+                                                    :function (fn [this input-channel]
+                                                                (let [code (first input-channel)]
+                                                                   (when (= code UNLOCK-GC)    
+                                                                     (kill-task _ this)
+                                                                     (println "UNLOCKING")
+                                                                     (deliver p true))))
+                                                    :without-locking true})
+                                                                                                                    
+                                           (println "LOCKING...")
+                                           @p)))                                      
+                                            
+                             :default
                                            
-                                           nil)))))
+                             nil))))
         
     (lamina/receive-all (internal-channel _ :kernel :kernel)     
                         (fn 
@@ -624,8 +718,8 @@
                 
                                 (= code PING)
         
-                                (send-net _ (package (first payload) 0)))))))
-    
+                                (send-net _ (package (first payload) (time-now))))))))
+
     (async/go
       (loop []
         (let [^String data (async/<! (:network-in-channel @total-channel-list))]
@@ -635,7 +729,7 @@
         (if @alive
           (recur))))
     _)
-    
+
   ICPUTaskUtil
   
   (kill-task
@@ -643,18 +737,25 @@
     (core/obliterate task)
     (swap! task-list dissoc (:name task))))
 
+(defn wait-for-lock
+  [unit]
+  (lamina/wait-for-message (instruction unit [LOCK-GC])))
+
+(defn unlock
+  [unit]
+  (instruction unit [UNLOCK-GC]))
 
 (defmacro with-gc-locking
   [unit & code]
   `(do
-     (instruction ~unit [LOCK-GC])
+     (wait-for-lock ~unit)
      (let [ret# (do ~@code)]
-       (instruction ~unit [UNLOCK-GC])
+       (unlock ~unit)
        ret#)))
 
 (defn cyber-physical-unit
   [ip]
-  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom true) (lamina/permanent-channel)) (s/fn [x] (garbage-collect x)))]
+  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true)) (s/fn [x] (garbage-collect x)))]
     (with-meta new-cpu
       {:type ::cyber-physical-unit
       ::source (fn [] @(:task-list new-cpu))})))
@@ -676,7 +777,7 @@
         
           start-time (time-now)
         
-          cb (fn [x] (deliver p (time-passed start-time)))]
+          cb (fn [x] (deliver p (time-passed x)))]
     
       (lamina/receive ch cb)   
       (send-net unit (package "subscribe" ch-name))     
@@ -726,27 +827,45 @@
 
 (instruction cpu [START-SERVER 8998])
 
-(instruction cpu [START-CLIENT "10.42.43.3" 8998])
+(instruction cpu [START-TCP-CLIENT "10.42.43.3" 8998])
 
 (send-net cpu (package "kernel" {:hi 1}))
     
 ;(task cpu 
 ;      {:function (s/fn [this kernel] (println kernel))})
 
-(with-gc-locking cpu
-  (temporary-channel cpu "hi")
-  (Thread/sleep 20000)
-  (println @(:total-channel-list cpu)))
+;(with-gc-locking cpu
+;  (temporary-channel cpu "hi")
+;  (Thread/sleep 20000)
+;  (println @(:total-channel-list cpu)))
 
-(future (loop [] (ping-cpu cpu "10.42.43.3") (Thread/sleep 100) (recur)))
+(future (loop [] (ping-cpu cpu "10.42.43.3") (Thread/sleep 5000) (recur)))
+
+(instruction cpu [START-UDP-CLIENT])
+
+@(lamina/read-channel (instruction cpu [UDP-BROADCAST 5 250]))
 
 ;END TEST
-  
-  
-  
-  
-  
- 
+
+
+;(def test-o (fn [] (println 1)))
+;
+;
+;(let [test-o-two (fn [] (test-o))]
+;  
+;  (task cpu {:function (fn [this] (locking test-o-two (println "TASK") (test-o-two)))
+;             :update-time 1000})
+;
+;  (on-pool core/exec (locking test-o-two
+;            (test-o-two)
+;            (Thread/sleep 10000)))
+;  
+;    (on-pool core/exec (locking test-o-two
+;            (test-o-two)
+;            (Thread/sleep 5000))))
+
+
+
 
 
 
