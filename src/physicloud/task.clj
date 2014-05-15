@@ -1,5 +1,6 @@
 (ns physicloud.task
   (:require [lamina.core :as lamina])
+  (:use [physicloud.utilities])
   (:import [java.util.concurrent TimeUnit]
            [java.util.concurrent Executors]
            [java.util.concurrent ScheduledThreadPoolExecutor]
@@ -32,8 +33,6 @@
   (keyword (str (name name-a) (name name-b))))
 
 (defprotocol ^{:private true} TaskInternals 
-  (add-cb [this fn ^Channel channel name] "Adds a callback to a channel")
-  (contains-cb [this name] "Determines if a callback is registered to a channel")
   (obliterate [this] "Removes all data from a task"))
 
 (defprotocol ^{:private true} ConsumeInternals
@@ -48,25 +47,15 @@
 
 (defprotocol ^{:private true} TimeInternals
    (state-change [this data] "Updates the state of the task with 'data'")
-   (reschedule-task [this t d] "Changes the update period of the task's task")
+   (reschedule-task [this period delay] "Changes the update period of the task's task")
    (cancel-task [this] "Cancels a task's scheduled task")
-   (schedule-task [this task period delay] "Schedules a task's task to be executed periodically")
+   (schedule-task [this period delay] "Schedules a task's task to be executed periodically")
    (get-state [this] "Returns the internal state of the task"))
 
 (defrecord ^{:private true} TimeTaskE 
   [function name ^Channel channel ^Integer update-time ^String type]
   
   TaskInternals
-  
-  (contains-cb
-    [this name] 
-    (println "This operation is not availalble for an empty task")
-    this)
-  
-  (add-cb
-    [this fn channel name]
-    (println "This operation is not availalble for an empty task")
-    this)
   
   (obliterate
     [this]
@@ -125,36 +114,22 @@
     this)
   
   (reschedule-task
-    [this t d]
-    (reset! update-time t)
+    [this period delay]
+    (reset! update-time period)
     (cancel-task this)
-    (schedule-task this function t d)
+    (schedule-task this period delay)
     this)
   
   (schedule-task 
-    [this task period delay]
+    [this period delay]
     (if (contains? @tasks name)
       (println "Task already scheduled!" (str name))
-      (swap! tasks assoc name (.scheduleAtFixedRate exec task 0 period TimeUnit/MILLISECONDS)))
+      (swap! tasks assoc name (.scheduleAtFixedRate exec (fn [] (function {:this this})) delay period TimeUnit/MILLISECONDS)))
     this))
 
-(defrecord ^{:private true} TimeTaskC [i-channels state function name ^Channel channel ^Integer update-time ^String type consumes]
+(defrecord ^{:private true} TimeTaskC [input state function name ^Channel channel ^Integer update-time ^String type consumes]
   
   TaskInternals
-  
-  (contains-cb
-    [this name] 
-    (let [found (atom false)]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (meta a) name)
-          (reset! found true)))
-      @found))
-  
-  (add-cb
-    [this fn channel name]
-    (let [cb (with-meta fn (assoc (meta fn) name fn))]
-      (lamina/receive-all channel cb)
-      (swap! i-channels assoc cb channel)))
   
   (obliterate
     [this]
@@ -181,30 +156,27 @@
   
   (detach
     [this channel] 
-    (let [found (atom false) cb-name (combine-name name (:name (meta channel)))]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (set (keys (meta a))) cb-name)
-          (do (lamina/cancel-callback (get @i-channels a) a)
-            (swap! i-channels dissoc a) 
-            (reset! found true))))))
+    (lamina/cancel-callback channel (get @input channel))
+    (swap! input dissoc channel))
     
   (detach-all
     [this]
-    (doseq [k (keys @i-channels)]
-      (lamina/cancel-callback (get @i-channels k) k))          
-    (reset! i-channels {})
+    (doseq [k (keys @input)]
+      (lamina/cancel-callback k (get @input k)))          
+    (reset! input {})
     this)
   
   (attach
     [this channel]
-    (if (contains? consumes (:data (meta channel)))
+    (if (contains? consumes (:name (meta channel)))
       (do 
-        (if (contains-cb this (combine-name name (:name (meta channel))))
-          (println (str name) " already attached to " (:data (meta channel)))
-          (add-cb this #(state-change this %) channel 
-                        (combine-name name (:name (meta channel))))))    
-      (println "Invalid channel attachment from "(str name) " to " (:data (meta channel))))
-    this)
+        (if (contains? @input channel)
+          (println (str name) " already attached to " (:name (meta channel)))
+          (let [cb (fn [x] (state-change this x))]
+            (lamina/receive-all channel cb)
+            (swap! assoc input channel cb)))    
+      (println "Invalid channel attachment from "(str name) " to " (:name (meta channel))))
+    this))
   
   TimeInternals
   
@@ -224,32 +196,22 @@
     this)
   
   (reschedule-task
-    [this t d]
-    (reset! update-time t)
+    [this period delay]
+    (reset! update-time period)
     (cancel-task this)
-    (schedule-task this #(function this) t d)
+    (schedule-task this period delay)
     this)
   
   (schedule-task 
-    [this task period delay]
+    [this period delay]
     (if (contains? @tasks name)
       (println "Task already scheduled!" (str name))
-      (swap! tasks assoc name (.scheduleAtFixedRate exec task 0 period TimeUnit/MILLISECONDS)))
+      (swap! tasks assoc name (.scheduleAtFixedRate exec (fn [] (function (merge {:this this} (get-state this)))) delay period TimeUnit/MILLISECONDS)))
     this))
 
-(defrecord ^{:private true} TimeTaskP [o-channels state function name ^Channel channel ^Integer update-time ^String type produces]
+(defrecord ^{:private true} TimeTaskP [output state function name ^Channel channel ^Integer update-time ^String type produces]
   
   TaskInternals
-  
-  (contains-cb
-    [this name] 
-    (println "This operation is not available for a producing task")
-    this)
-  
-  (add-cb
-    [this fn channel name]
-    (println "This operation is not available for a producing task")
-    this)
   
   (obliterate
     [this]
@@ -259,23 +221,19 @@
   
   (produce
     [this]   
-    (let [data (function this)]
-      (doseq [c @o-channels] (lamina/enqueue c {produces data})))
+    (lamina/enqueue @output {produces (function (merge {:this this} (get-state this)))})
     this)
   
   (add-outbound
     [this channel] 
-    (if (= produces (:data (meta channel)))
-      (swap! o-channels conj channel)
+    (if (= produces (:name (meta channel)))
+      (reset! output channel)
       (println "Invalid outbound channel for "(str name)))
     this)
   
   (remove-outbounds
     [this]
-    (let [m (transient @o-channels) k @o-channels]
-      (apply disj! m k)
-      (reset! o-channels (persistent! m)))
-    this)
+    (reset! output nil))
   
   ConsumeInternals
   
@@ -313,36 +271,22 @@
     this)
   
   (reschedule-task
-    [this t d]
-    (reset! update-time t)
+    [this period delay]
+    (reset! update-time period)
     (cancel-task this)
-    (schedule-task this #(function this) t d)
+    (schedule-task this period delay)
     this)
   
   (schedule-task 
-    [this task period delay]
+    [this period delay]
     (if (contains? @tasks name)
       (println "Task already scheduled!" (str name))
-      (swap! tasks assoc name (.scheduleAtFixedRate exec task 0 period TimeUnit/MILLISECONDS)))
+      (swap! tasks assoc name (.scheduleAtFixedRate exec (fn [] (produce this)) delay period TimeUnit/MILLISECONDS)))
     this))
 
-(defrecord ^{:private true} TimeTaskCP [i-channels o-channels state function name ^Channel channel ^Integer update-time ^String type consumes produces]
+(defrecord ^{:private true} TimeTaskCP [input output state function name ^Channel channel ^Integer update-time ^String type consumes produces]
   
   TaskInternals
-  
-  (contains-cb
-    [this name] 
-    (let [found (atom false)]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (meta a) name)
-          (reset! found true)))
-      @found))
-  
-  (add-cb
-    [this fn channel name]
-    (let [cb (with-meta fn (assoc (meta fn) name fn))]
-      (lamina/receive-all channel cb)
-      (swap! i-channels assoc cb channel)))
   
   (obliterate
     [this]
@@ -352,52 +296,45 @@
   
   (produce
     [this]   
-    (let [data (function this)]
-      (doseq [c @o-channels] (lamina/enqueue c {produces data})))
+    (lamina/enqueue @output {produces (function (merge {:this this} (get-state this)))})
     this)
   
   (add-outbound
     [this channel] 
-    (if (= produces (:data (meta channel)))
-      (swap! o-channels conj channel)
+    (if (= produces (:name (meta channel)))
+      (reset! output channel)
       (println "Invalid outbound channel for "(str name)))
     this)
   
   (remove-outbounds
     [this]
-    (let [m (transient @o-channels) k @o-channels]
-      (apply disj! m k)
-      (reset! o-channels (persistent! m)))
-    this)
+    (reset! output nil))
   
   ConsumeInternals
   
   (detach
     [this channel] 
-    (let [found (atom false) cb-name (combine-name name (:name (meta channel)))]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (set (keys (meta a))) cb-name)
-          (do (lamina/cancel-callback (get @i-channels a) a)
-            (swap! i-channels dissoc a) 
-            (reset! found true))))))
+    (lamina/cancel-callback channel (get @input channel))
+    (swap! input dissoc channel))
     
   (detach-all
     [this]
-    (doseq [k (keys @i-channels)]
-      (lamina/cancel-callback (get @i-channels k) k))          
-    (reset! i-channels {})
+    (doseq [k (keys @input)]
+      (lamina/cancel-callback k (get @input k)))          
+    (reset! input {})
     this)
   
   (attach
     [this channel]
-    (if (contains? consumes (:data (meta channel)))
+    (if (contains? consumes (:name (meta channel)))
       (do 
-        (if (contains-cb this (combine-name name (:name (meta channel))))
-          (println (str name) " already attached!")
-          (add-cb this #(state-change this %) channel 
-                        (combine-name name (:name (meta channel))))))    
-      (println "Invalid channel attachment from "(str name) " to " (:data (meta channel))))
-    this)
+        (if (contains? @input channel)
+          (println (str name) " already attached to " (:name (meta channel)))
+          (let [cb (fn [x] (state-change this x))]
+            (lamina/receive-all channel cb)
+            (swap! assoc input channel cb)))    
+      (println "Invalid channel attachment from "(str name) " to " (:name (meta channel))))
+    this))
   
   TimeInternals
   
@@ -417,36 +354,22 @@
     this)
   
   (reschedule-task
-    [this t d]
-    (reset! update-time t)
+    [this period delay]
+    (reset! update-time period)
     (cancel-task this)
-    (schedule-task this #(function this) t d)
+    (schedule-task this period delay)
     this)
   
   (schedule-task 
-    [this task period delay]
+    [this period delay]
     (if (contains? @tasks name)
       (println "Task already scheduled!" (str name))
-      (swap! tasks assoc name (.scheduleAtFixedRate exec task 0 period TimeUnit/MILLISECONDS)))
+      (swap! tasks assoc name (.scheduleAtFixedRate exec (fn [] (produce this)) delay period TimeUnit/MILLISECONDS)))
     this))
 
-(defrecord ^{:private true} EventTaskC [i-channels function name ^Channel channel ^String type consumes]
+(defrecord ^{:private true} EventTaskC [input function name ^Channel channel ^String type consumes]
   
   TaskInternals
-  
-  (contains-cb
-    [this name] 
-    (let [found (atom false)]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (meta a) name)
-          (reset! found true)))
-      @found))
-  
-  (add-cb
-    [this fn channel name]
-    (let [cb (with-meta fn (assoc (meta fn) name fn))]
-      (lamina/receive-all channel cb)
-      (swap! i-channels assoc cb channel)))
   
   (obliterate
     [this]
@@ -473,28 +396,25 @@
   
   (detach
     [this channel] 
-    (let [found (atom false) cb-name (combine-name name (:name (meta channel)))]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (set (keys (meta a))) cb-name)
-          (do (lamina/cancel-callback (get @i-channels a) a)
-            (swap! i-channels dissoc a) 
-            (reset! found true)))))
-    this)
-  
+    (lamina/cancel-callback channel (get @input channel))
+    (swap! input dissoc channel))
+    
   (detach-all
     [this]
-    (doseq [k (keys @i-channels)]
-      (lamina/cancel-callback (get @i-channels k) k))          
-    (reset! i-channels {})
+    (doseq [k (keys @input)]
+      (lamina/cancel-callback k (get @input k)))          
+    (reset! input {})
     this)
   
   (attach
     [this channel]
-    (if (contains? consumes (:data (meta channel)))
+    (if (contains? consumes (:name (meta channel)))
       (do 
-        (if (contains-cb this (combine-name name (:name (meta channel))))
+        (if (contains? @input channel)
           (println (str name) " already attached!")
-          (add-cb this (fn [x] (if (map? x) (function this x))) channel (combine-name name (:name (meta channel))))))    
+          (let [cb (fn [x] (function {:this this (first consumes) x}))]
+            (lamina/receive-all channel cb)
+            (swap! input assoc channel cb))))
       (println "Invalid channel attachment from "(str name) " to " (:data (meta channel))))
     this)
   
@@ -516,33 +436,19 @@
     this)
   
   (reschedule-task
-    [this t d]
+    [this period delay]
    (println "This operation is not available for event tasks")
     this)
   
   (schedule-task 
-    [this task period delay]
+    [this period delay]
    (println "This operation is not available for event tasks")
     this))
 
 
-(defrecord ^{:private true} EventTaskCP [i-channels o-channels function name ^Channel channel ^String type consumes produces]
+(defrecord ^{:private true} EventTaskCP [input output function name ^Channel channel ^String type consumes produces]
   
   TaskInternals
-  
-  (contains-cb
-    [this name] 
-    (let [found (atom false)]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (meta a) name)
-          (reset! found true)))
-      @found))
-  
-  (add-cb
-    [this fn channel name]
-    (let [cb (with-meta fn (assoc (meta fn) name fn))]
-      (lamina/receive-all channel cb)
-      (swap! i-channels assoc cb channel)))
   
   (obliterate
     [this]
@@ -557,48 +463,39 @@
   
   (add-outbound
     [this channel] 
-    (if (= produces (:data (meta channel)))
-      (swap! o-channels conj channel)
+    (if (= produces (:name (meta channel)))
+      (reset! output channel)
       (println "Invalid outbound channel for "(str name)))
     this)
   
   (remove-outbounds
     [this]
-    (let [m (transient @o-channels) k @o-channels]
-      (apply disj! m k)
-      (reset! o-channels (persistent! m)))
+    (reset! output nil)
     this)
   
   ConsumeInternals
   
   (detach
     [this channel] 
-    (let [found (atom false) cb-name (combine-name name (:name (meta channel)))]
-      (doseq [a (keys @i-channels) :while (false? @found)] 
-        (if (contains? (set (keys (meta a))) cb-name)
-          (do (lamina/cancel-callback (get @i-channels a) a)
-            (swap! i-channels dissoc a) 
-            (reset! found true)))))
-    this)
+    (lamina/cancel-callback channel (get @input channel))
+    (swap! input dissoc channel))
     
   (detach-all
     [this]
-    (doseq [k (keys @i-channels)]
-      (lamina/cancel-callback (get @i-channels k) k))          
-    (reset! i-channels {})
+    (doseq [k (keys @input)]
+      (lamina/cancel-callback k (get @input k)))          
+    (reset! input {})
     this)
   
   (attach
     [this channel]
-    (if (contains? consumes (:data (meta channel)))
+    (if (contains? consumes (:name (meta channel)))
       (do 
-        (if (contains-cb this (combine-name name (:name (meta channel))))
+        (if (contains? @input channel)
           (println (str name) " already attached!")
-          (add-cb this #(if (map? %)
-                           (let [data (function this %)] 
-                             (doseq [c @o-channels] (lamina/enqueue c {produces data}))))
-                  channel 
-                  (combine-name name (:name (meta channel))))))    
+          (let [cb (fn [x] (lamina/enqueue @output {produces (function {:this this (first consumes) x})}))]
+            (lamina/receive-all channel cb)
+            (swap! input assoc channel cb))))
       (println "Invalid channel attachment from "(str name) " to " (:data (meta channel))))
     this)
   
@@ -620,12 +517,12 @@
     this)
   
   (reschedule-task
-    [this t d]
+    [this period delay]
     (println "Not available for event tasks")
     this)
   
   (schedule-task 
-    [this task period delay]
+    [this period delay]
     (println "Not available for event tasks")
     this))
 
@@ -640,13 +537,15 @@
         (empty? (:consumes task-config-map))
         
         (if (empty? (:produces task-config-map))
-          (TimeTaskE. (with-meta #(task-error-handler TimeTaskE % ((:function task-config-map))) (meta (:function task-config-map)))
+          
+          (TimeTaskE. (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                        (:name task-config-map) 
                        ch 
                        (atom (:update-time task-config-map))
                        (:type task-config-map))
-          (TimeTaskP. (atom #{}) (atom {})                                    
-                       (with-meta #(task-error-handler TimeTaskP % ((:function task-config-map) %)) (meta (:function task-config-map)))
+          
+          (TimeTaskP. (atom nil) (atom {})                                    
+                       (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                        (:name task-config-map) 
                        ch 
                        (atom (:update-time task-config-map))
@@ -656,13 +555,15 @@
         (empty? (:produces task-config-map))
         
         (if (empty? (:consumes task-config-map))
-          (TimeTaskE. (with-meta #(task-error-handler TimeTaskE % ((:function task-config-map))) (meta (:function task-config-map)))
+          
+          (TimeTaskE. (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                        (:name task-config-map) 
                        ch 
                        (atom (:update-time task-config-map))
                        (:type task-config-map))
+          
           (TimeTaskC. (atom {}) (atom {})                                    
-                       (with-meta #(task-error-handler TimeTaskC % ((:function task-config-map) %)) (meta (:function task-config-map)))
+                       (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                        (:name task-config-map) 
                        ch 
                        (atom (:update-time task-config-map))
@@ -671,8 +572,8 @@
         
         :else             
         
-        (TimeTaskCP. (atom {}) (atom #{}) (atom {})                                    
-                (with-meta #(task-error-handler TimeTaskCP % ((:function task-config-map) %)) (meta (:function task-config-map)))
+        (TimeTaskCP. (atom {}) (atom nil) (atom {})                                    
+                (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                 (:name task-config-map) 
                 ch 
                 (atom (:update-time task-config-map))
@@ -683,16 +584,18 @@
       (if (empty? (:consumes task-config-map))
         (println "An event task must consume data")
         (if (empty? (:produces task-config-map))
+          
           (let [t (EventTaskC. (atom {})
-                            (with-meta #(task-error-handler EventTaskC %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
+                            (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                             (:name task-config-map)
                             ch 
                             (:type task-config-map)
                             (:consumes task-config-map))]
             (with-meta t {:type ::event-task-consumer
                           ::source (fn [] {:function (:function t) :name (:name t) :consumes (:consumes t)})}))
-          (EventTaskCP. (atom {}) (atom #{}) 
-                         (with-meta #(task-error-handler EventTaskCP %1 ((:function task-config-map) %1 %2)) (meta (:function task-config-map)))
+          
+          (EventTaskCP. (atom {}) (atom nil) 
+                         (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
                          (:name task-config-map)
                          ch 
                          (:type task-config-map)
@@ -701,4 +604,3 @@
 
 (defmethod print-method ::event-task-consumer [o ^Writer w]
   (print-method ((::source (meta o))) w))
-

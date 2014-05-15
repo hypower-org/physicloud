@@ -1,4 +1,4 @@
-(ns physicloud-tests.utilities
+(ns physicloud.utilities
   (:require [lamina.core :as lamina]
             [lanterna.terminal :as t]
             [clojure.core.async :as async])
