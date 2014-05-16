@@ -2,7 +2,7 @@
   (:require [lamina.core :as lamina]
             [physicloud.kernel :as kernel]
             [physicloud.task :as core]
-            [physicloud-tests.mattsalgorithm :as cdc])
+            [physicloud-tests.quasidecent-algorithm :as qda])
   (:use [physicloud-tests.newnetworking]
         [incanter.stats]
         [incanter.charts]
@@ -16,7 +16,7 @@
       (swap! (:state this) assoc :control (:control (:clouddata state)))
       (swap! (:state this) assoc :x (:x (:position (:clouddata state))))
       (swap! (:state this) assoc :y (:y (:position (:clouddata state)))))
-    (let [new-state (cdc/state-step state cdc/ro cdc/vs cdc/del-global-constraints)]
+    (let [new-state (qda/state-step state qda/ro qda/vs qda/del-global-constraints)]
       (swap! (:state this) assoc-in [:x (:number state)] (first new-state))
       (swap! (:state this) assoc-in [:y (:number state)] (second new-state)))
     state))

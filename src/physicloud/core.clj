@@ -1161,12 +1161,3 @@
       
       (if on-disconnect
         (on-disconnect)))))
-
-;TEST
-
-(def cpu (cyber-physical-unit "10.42.43.3"))
-
-(on-pool t/exec (into-physicloud cpu :heatbeat 2000 :on-disconnect (fn [] (println "Disconnected!"))))
-
-;END TEST
-

@@ -1,21 +1,21 @@
 (ns physicloud.utilities
   (:require [lamina.core :as lamina]
-            [lanterna.terminal :as t]
+            [lanterna.terminal :as term]
             [clojure.core.async :as async])
   (:import [lamina.core.channel Channel]
            [clojure.core.async.impl.channels ManyToManyChannel]))
 
-(def term (t/get-terminal :swing))
-(t/start term)
+(def terminal (term/get-terminal :swing))
+(term/start terminal)
 (def current-line (atom 0))
 (defn write-to-terminal
   [& args]
-  (if (< @current-line (second (t/get-size term)))
+  (if (< @current-line (second (term/get-size terminal)))
     (do
-      (t/put-string term (str args) 0 @current-line)
+      (term/put-string terminal (str args) 0 @current-line)
       (swap! current-line inc))
     (do
-      (t/clear term)
+      (term/clear terminal)
       (reset! current-line 0)
       (write-to-terminal args))))
 

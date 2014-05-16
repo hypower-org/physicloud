@@ -1,4 +1,4 @@
-(ns physicloud-tests.mattsalgorithm)
+(ns physicloud-tests.quasidecent-algorithm)
 
 (use 'incanter.stats)
 (use 'incanter.charts)
