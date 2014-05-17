@@ -786,7 +786,7 @@
                              (= code START-UDP-CLIENT)
                              
                              ;START-UDP-CLIENT expects [OP-CODE]
-
+                             
                              (let [^Channel udp-client-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port 8999 :frame (gloss/string :utf-8) :broadcast true}))
                                                   
                                    data (atom {})
@@ -802,7 +802,7 @@
                                           (cond
                                             (= code "hello?") (lamina/enqueue udp-client-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
                                             (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
-                                              
+                               
                                (lamina/receive-all udp-client-channel cb)       
                                
                                ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
@@ -817,16 +817,18 @@
                                                                                         
                                                                            (let [intervals (second input-channel)
                                                                                               
-                                                                                 interval-time (nth input-channel 2)]                                                                                          
-                                                                          
-                                                                               (loop [i intervals]
-                                                                                 (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})  
-                                                                                                  (reduce #(conj %1 (str "10.42.43." (str %2))) [] (range 1 10)))]
-                                                                                   (lamina/enqueue udp-client-channel msg))
-                                                                                 (Thread/sleep interval-time)
-                                                                                 (if (> i 0)
-                                                                                   (recur (dec i))
-                                                                                   (lamina/enqueue (nth input-channel 3) @data))))))
+                                                                                 interval-time (nth input-channel 2)
+                                                                                 
+                                                                                 ip-addr-str (str (join "." (subvec (split ip-address #"\.") 0 3)) ".")]                                                                                          
+
+                                                                             (loop [i intervals]
+                                                                               (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})
+                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 10)))]
+                                                                                 (lamina/enqueue udp-client-channel msg))
+                                                                               (Thread/sleep interval-time)
+                                                                               (if (> i 0)
+                                                                                 (recur (dec i))
+                                                                                 (lamina/enqueue (nth input-channel 3) @data))))))
                                                              :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
                                               
                                  ;Make a task for stopping the udp-client
@@ -1127,7 +1129,8 @@
         
         (change-server-ip unit (get neighbors k))
         (reset! found true)
-        (write-to-terminal "Server found")
+        (println "Server found")
+;        (write-to-terminal "Server found")
         (instruction unit [START-TCP-CLIENT (get neighbors k) 8998]))
       
       ;When a server isn't in existence, the LOWEST ip starts the server!

@@ -4,6 +4,7 @@
 
 ; This test demonstrates the creation of a basic Cyber Physical Unit in PhysiCloud.
 
-(def test-cpu (core/cyber-physical-unit "10.42.43.3"))
+; Create a CPU at the provided IP address.
+(def test-cpu (core/cyber-physical-unit "10.10.10.5"))
 
-(core/on-pool t/exec (core/into-physicloud test-cpu :heatbeat 2000 :on-disconnect (fn [] (println "Disconnected!"))))
+(core/on-pool t/exec (core/into-physicloud test-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
