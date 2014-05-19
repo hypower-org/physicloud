@@ -174,9 +174,9 @@
           (println (str name) " already attached to " (:name (meta channel)))
           (let [cb (fn [x] (state-change this x))]
             (lamina/receive-all channel cb)
-            (swap! input assoc channel cb)))    
+            (swap! input assoc channel cb))))    
       (println "Invalid channel attachment from "(str name) " to " (:name (meta channel))))
-    this))
+    this)
   
   TimeInternals
   
@@ -333,9 +333,9 @@
           (println (str name) " already attached to " (:name (meta channel)))
           (let [cb (fn [x] (state-change this x))]
             (lamina/receive-all channel cb)
-            (swap! input assoc channel cb)))    
+            (swap! input assoc channel cb))))    
       (println "Invalid channel attachment from "(str name) " to " (:name (meta channel))))
-    this))
+    this)
   
   TimeInternals
   
