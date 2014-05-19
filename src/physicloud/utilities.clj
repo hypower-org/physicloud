@@ -5,19 +5,19 @@
   (:import [lamina.core.channel Channel]
            [clojure.core.async.impl.channels ManyToManyChannel]))
 
-(def terminal (term/get-terminal :swing))
-(term/start terminal)
-(def current-line (atom 0))
-(defn write-to-terminal
-  [& args]
-  (if (< @current-line (second (term/get-size terminal)))
-    (do
-      (term/put-string terminal (str args) 0 @current-line)
-      (swap! current-line inc))
-    (do
-      (term/clear terminal)
-      (reset! current-line 0)
-      (write-to-terminal args))))
+;(def terminal (term/get-terminal :swing))
+;(term/start terminal)
+;(def current-line (atom 0))
+;(defn write-to-terminal
+;  [& args]
+;  (if (< @current-line (second (term/get-size terminal)))
+;    (do
+;      (term/put-string terminal (str args) 0 @current-line)
+;      (swap! current-line inc))
+;    (do
+;      (term/clear terminal)
+;      (reset! current-line 0)
+;      (write-to-terminal args))))
 
 (defn lamina-to-async
   "Handles translation from core.async to lamina channels"

@@ -52,7 +52,7 @@
 (declare temporary-channel)
 (declare remove-channel)
 (declare send-net)
-(declare net-channel)
+(declare external-channel)
 (declare internal-channel)
 (declare ping-channel)
 (declare parse-item)
@@ -81,13 +81,13 @@
       (let [c (keyword channel-name)]
         (when-not (contains? @channel-list c)
           (swap! channel-list assoc c (atom {})))
-        (swap! (get @channel-list c) assoc client-channel client-ip))
+        (swap! (c @channel-list) assoc client-channel client-ip))
       (lamina/enqueue client-channel (str channel-name "|" "connected")))
   
   (unsubscribe
     [this channel-name]
     (let [c (keyword channel-name)]
-      (when-let [c-list (get @channel-list c)]
+      (when-let [c-list (c @channel-list)]
         (swap! c-list dissoc client-channel)
         (if (empty? @c-list)
           (swap! channel-list dissoc c)))))
@@ -136,7 +136,7 @@
       
         (do
           (when-let [c-list (get @channel-list (keyword code))]
-            (write-to-terminal code " -> " payload " -> " @(get @channel-list (keyword code)))
+            ;(write-to-terminal code " -> " payload " -> " @(get @channel-list (keyword code)))
             (doseq [i (keys @c-list)]
               (when (= (lamina/enqueue i msg) :lamina/closed!)
                 (swap! c-list dissoc i)
@@ -234,7 +234,7 @@
         ;Take all of the data from the client and 'put' it into a core.async channel!
         (lamina/receive-all client (fn [msg] (lamina-to-async (:network-in-channel @(:total-channel-list unit)) msg)))
     
-        (write-to-terminal "Client connected")
+        ;(write-to-terminal "Client connected")
     
         client))))
 
@@ -275,7 +275,9 @@
         (do        
           (if lock 
             (unlock unit))
-          (net-channel unit data))
+          (let [ch (external-channel unit data)]
+            (subscribe-and-wait unit ch)
+            ch))
       
       
         ;Looks like the CPU needs to get the data over the network!
@@ -314,8 +316,6 @@
                          (remove-channel unit ch)
     
                          @collected-data)]   
-                                   
-          (println net-data)
         
           ;If you actually got something...        
           
@@ -331,7 +331,9 @@
                   ch-name (name data)
                 
                   ;Make a networked channel for the data!
-                  ch (net-channel unit data)]                       
+                  ch (let [ch (external-channel unit data)]
+                       (subscribe-and-wait unit ch)
+                       ch)]                       
                   
               ;Unlock if you're supposed to!
               
@@ -414,7 +416,7 @@
          :or {auto-establish true listen-time 1000}}]
 
    ;If there isn't a name, generate a random one!
-  (let [name (if name name (str (gensym "task_"))) 
+  (let [opts (if name opts (merge opts {:name (str (gensym "task_"))})) 
         
         task-list (:task-list unit) 
         
@@ -426,7 +428,7 @@
     
       ;Check if a task with the given name already exists...
       
-      (contains? @task-list name)
+      (contains? @task-list (:name opts))
     
       (println "A task with that name already exists!")
       
@@ -459,64 +461,66 @@
             (swap! (:state a) merge init))
           
           ;Put the task into the task-list!
-          (swap! task-list assoc name a)   
+          (swap! task-list assoc (:name opts) a)   
                   
           ;When the task is supposed to be automatically established...
           
           (when auto-establish
             (let [channel-list (merge @internal-channel-list @external-channel-list)]   
+              
               (if (:produces a)
+                
                 (if (empty? (:consumes a))
               
                   ;If it doesn't consume but it produces, generate the output channel, make the task publish to it, and schedule its function!
                   (do
-                    (internal-channel unit (keyword (gensym)) (:produces a))
+                    (internal-channel unit (:produces a))
                     (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
                     (t/schedule-task a update-time 0))
               
-                    ;If the task consumes something, do it in the background.  Who wants to wait for that!
+                  ;If the task consumes something, do it in the background.  Who wants to wait for that!
                     
-                    (on-pool t/exec
-                             (loop []
+                  (on-pool t/exec
+                           (loop []
                                
-                               ;If the task supposed to lock...
+                             ;If the task supposed to lock...
                                
-                               (if-not without-locking
-                                 (wait-for-lock unit))
+                             (if-not without-locking
+                               (wait-for-lock unit))
                                
-                               ;For any types the task consumes, try to generate channels for them!
-                               (doseq [i (:consumes a)]
-                                 (genchan i :listen-time listen-time :lock false))
+                             ;For any types the task consumes, try to generate channels for them!
+                             (doseq [i (:consumes a)]
+                               (genchan unit i :listen-time listen-time :lock false))
                                
-                               ;If all my dependencies are satisfied...
+                             ;If all my dependencies are satisfied...
                                
-                               (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
-                                     (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
+                             (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
+                                   (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                                  
-                                 ;Set up the publishing and listening for a task!
-                                 (do
-                                   (internal-channel unit (:produces a))
-                                   (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
-                                   (doseq [c (:consumes a)]
-                                     (t/attach a (c (merge @internal-channel-list @external-channel-list))))
-                                   (t/schedule-task a update-time 0)
+                               ;Set up the publishing and listening for a task!
+                               (do
+                                 (internal-channel unit (:produces a))
+                                 (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
+                                 (doseq [c (:consumes a)]
+                                   (t/attach a (c (merge @internal-channel-list @external-channel-list))))
+                                 (t/schedule-task a update-time 0)
                                    
-                                   ;If the task is supposed to do something when it's established...
+                                 ;If the task is supposed to do something when it's established...
                                    
-                                   (if on-established
-                                     (on-established))
+                                 (if on-established
+                                   (on-established))
                                    
-                                   ;If the task is supposed to lock...
+                                 ;If the task is supposed to lock...
                                    
-                                   (if-not without-locking
-                                     (unlock unit)))
+                                 (if-not without-locking
+                                   (unlock unit)))
                                  
-                                  ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
+                                ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
                                   
-                                 (do
-                                   (if-not without-locking
-                                     (unlock unit))
-                                   (recur))))))
+                               (do
+                                 (if-not without-locking
+                                   (unlock unit))
+                                 (recur))))))
             
                 (if (empty? (:consumes a))      
                   
@@ -535,7 +539,7 @@
                                (wait-for-lock unit))
                              
                                (doseq [i (:consumes a)]
-		                               (genchan i :listen-time listen-time :lock false))
+		                               (genchan unit i :listen-time listen-time :lock false))
                                (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
                                      (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                                  (do
@@ -566,7 +570,7 @@
         (if init
           (swap! (:state a) merge init))
       
-        (swap! task-list assoc name a)        
+        (swap! task-list assoc (:name opts) a)        
       
         (if auto-establish        
                  
@@ -617,7 +621,6 @@
   "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
   [unit]
   (let [ch-list @(:total-channel-list unit)]
-    (println "COLLECTING")
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
         (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
@@ -632,7 +635,7 @@
   
   (internal-channel [_ name] "Creates a permanent, grounded channel to which tasks can attach.  Name and data should both be keywords.  ")
   
-  (net-channel [_ name] "Creates a permanent channel to which tasks can attach.  These should be used for network communication.  Name and data should both be keywords.
+  (external-channel [_ name] "Creates a permanent channel to which tasks can attach.  These should be used for network communication.  Name and data should both be keywords.
                               This call will query the server to see if a network channel with the given name already exists.")
   
   (remove-channel [_ channel] "Removes a channel from memory and unsubscribes it from the network.  Channel should be the channel itself."))
@@ -676,13 +679,12 @@
        (swap! total-channel-list assoc name ch)
        ch)))
   
- (net-channel 
+ (external-channel 
    [_ name]
    (if-not (or (contains? (merge @internal-channel-list @external-channel-list) name) (contains? @total-channel-list name))
      (let [^Channel ch (lamina/permanent-channel) ch (with-meta ch (merge (meta ch) {:name name}))]
        (swap! external-channel-list assoc name ch)
        (swap! total-channel-list assoc name ch)
-       (send-net _ (package "subscribe" (clojure.core/name name)))
        ch)))  
     
  (remove-channel
@@ -740,9 +742,9 @@
    ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.
     
    (task _ 
-       {:name "garbage-collector"
-       :function (fn [this] (locking gc-fn (gc-fn _)))
-       :update-time 10000})
+         
+         {:function (fn [this] (locking gc-fn (gc-fn _)))
+         :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
    ; [INSTRUCTION-CODE ~~~OTHER-DATA~~~~]   
@@ -763,7 +765,7 @@
                              (let [server (tcp-server (first payload))]
                                (task _ {:function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
-                                                      (kill-task _ this)
+                                                      (kill-task _ (:name this))
                                                       (kill server)))})
                                
                                (lamina/enqueue (last payload) server))
@@ -777,7 +779,7 @@
                             
                                (task _ {:function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-TCP-CLIENT)
-                                                      (kill-task _ this)
+                                                      (kill-task _ (:name this))
                                                       (lamina/force-close client)))})
                                
                                (lamina/enqueue (last payload) client))
@@ -839,8 +841,8 @@
                                                         ;If killed, close the UDP channel, remove this task, and remove the broadcasting task
                                                         
                                                         (lamina/force-close udp-client-channel)
-                                                        (kill-task _ this)
-                                                        (kill-task _ broadcast-task)))})))                                                 
+                                                        (kill-task _ (:name this))
+                                                        (kill-task _ (:name broadcast-task))))})))                                                 
                                             
                               (= code LOCK-GC)
                               
@@ -859,7 +861,7 @@
                                                     :function (fn [this input-channel]
                                                                 (let [code (first input-channel)]
                                                                    (when (= code UNLOCK-GC)    
-                                                                     (kill-task _ this)
+                                                                     (kill-task _ (:name this))
                                                                      (deliver p true))))
                                                     :without-locking true})
                                            
@@ -893,13 +895,14 @@
                                 ;This is a temporary solution to this problem.
                                 
                                 (do
-                                  (use 'clojure.pprint)
-                                  (write-to-terminal "siphon -> " (second payload) " -> " (first payload))
-                                  (task-helper _ {:type "event"        
-                                                  :consumes #{(keyword (second payload))}
-                                                  :function (fn [map] (let [this (:this map)]
-                                                                            (if (> (ping-channel _ (second payload)) 0) 
-                                                                              (send-net _ (package (first payload) (first (vals (dissoc this map))))) (do (println "DIEEEE")(kill-task _ this)))))}))
+                                  ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
+                                  (task-helper _ {:name (str "siphon -> " (first payload) " -> " (second payload))
+                                                  :type "event"
+                                                  :consumes #{(keyword (first payload))}
+                                                  :function (fn [map] 
+                                                              (if (ping-channel _ (first payload))
+                                                                (send-net _ (package (first payload) (dissoc map :this))) 
+                                                                (do (println "DIEEEE") (kill-task _ (:name (:this map))))))}))
       
                                 (= code REQUEST-REPEATER)
                                 
@@ -948,9 +951,9 @@
   ICPUTaskUtil
   
   (kill-task
-    [_ task]
-    (t/obliterate task);
-    (swap! task-list dissoc (:name task))))
+    [_ task-name]
+    (t/obliterate (get @task-list task-name))
+    (swap! task-list dissoc task-name)))
 
 (defn wait-for-lock
   "Waits for a lock on a CPU to be established"
