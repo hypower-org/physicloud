@@ -414,13 +414,15 @@
          :or {auto-establish true listen-time 1000}}]
 
    ;If there isn't a name, generate a random one!
-  (let [name (if name name (str (gensym "task_"))) 
+  (let [opts (if name opts (merge opts {:name (str (gensym "task_"))})) 
         
         task-list (:task-list unit) 
         
         internal-channel-list (:internal-channel-list unit) 
         
         external-channel-list (:external-channel-list unit)]  
+    
+      (println opts)
   
     (cond
     
@@ -465,58 +467,60 @@
           
           (when auto-establish
             (let [channel-list (merge @internal-channel-list @external-channel-list)]   
+              
               (if (:produces a)
+                
                 (if (empty? (:consumes a))
               
                   ;If it doesn't consume but it produces, generate the output channel, make the task publish to it, and schedule its function!
                   (do
-                    (internal-channel unit (keyword (gensym)) (:produces a))
+                    (internal-channel unit (:produces a))
                     (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
                     (t/schedule-task a update-time 0))
               
-                    ;If the task consumes something, do it in the background.  Who wants to wait for that!
+                  ;If the task consumes something, do it in the background.  Who wants to wait for that!
                     
-                    (on-pool t/exec
-                             (loop []
+                  (on-pool t/exec
+                           (loop []
                                
-                               ;If the task supposed to lock...
+                             ;If the task supposed to lock...
                                
-                               (if-not without-locking
-                                 (wait-for-lock unit))
+                             (if-not without-locking
+                               (wait-for-lock unit))
                                
-                               ;For any types the task consumes, try to generate channels for them!
-                               (doseq [i (:consumes a)]
-                                 (genchan i :listen-time listen-time :lock false))
+                             ;For any types the task consumes, try to generate channels for them!
+                             (doseq [i (:consumes a)]
+                               (genchan unit i :listen-time listen-time :lock false))
                                
-                               ;If all my dependencies are satisfied...
+                             ;If all my dependencies are satisfied...
                                
-                               (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
-                                     (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
+                             (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
+                                   (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                                  
-                                 ;Set up the publishing and listening for a task!
-                                 (do
-                                   (internal-channel unit (:produces a))
-                                   (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
-                                   (doseq [c (:consumes a)]
-                                     (t/attach a (c (merge @internal-channel-list @external-channel-list))))
-                                   (t/schedule-task a update-time 0)
+                               ;Set up the publishing and listening for a task!
+                               (do
+                                 (internal-channel unit (:produces a))
+                                 (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
+                                 (doseq [c (:consumes a)]
+                                   (t/attach a (c (merge @internal-channel-list @external-channel-list))))
+                                 (t/schedule-task a update-time 0)
                                    
-                                   ;If the task is supposed to do something when it's established...
+                                 ;If the task is supposed to do something when it's established...
                                    
-                                   (if on-established
-                                     (on-established))
+                                 (if on-established
+                                   (on-established))
                                    
-                                   ;If the task is supposed to lock...
+                                 ;If the task is supposed to lock...
                                    
-                                   (if-not without-locking
-                                     (unlock unit)))
+                                 (if-not without-locking
+                                   (unlock unit)))
                                  
-                                  ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
+                                ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
                                   
-                                 (do
-                                   (if-not without-locking
-                                     (unlock unit))
-                                   (recur))))))
+                               (do
+                                 (if-not without-locking
+                                   (unlock unit))
+                                 (recur))))))
             
                 (if (empty? (:consumes a))      
                   
@@ -535,7 +539,7 @@
                                (wait-for-lock unit))
                              
                                (doseq [i (:consumes a)]
-		                               (genchan i :listen-time listen-time :lock false))
+		                               (genchan unit i :listen-time listen-time :lock false))
                                (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
                                      (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                                  (do
@@ -740,9 +744,9 @@
    ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.
     
    (task _ 
-       {:name "garbage-collector"
-       :function (fn [this] (locking gc-fn (gc-fn _)))
-       :update-time 10000})
+         
+         {:function (fn [this] (locking gc-fn (gc-fn _)))
+         :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
    ; [INSTRUCTION-CODE ~~~OTHER-DATA~~~~]   
