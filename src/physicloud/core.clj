@@ -328,7 +328,7 @@
                   chosen (first net-data)
                 
                   ;Make a network channel name for the data-type!
-                  ch-name (str (name data))
+                  ch-name (name data)
                 
                   ;Make a networked channel for the data!
                   ch (net-channel unit data)]                       
@@ -337,8 +337,7 @@
               
               (if lock 
                 (unlock unit))
-              
-                                
+                                              
               ;Tell the chosen CPU to publish data!
               
               (send-net unit (package "kernel" [chosen ch-name (:ip-address unit)]))
@@ -622,7 +621,7 @@
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
         (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
-          (if-not (vec-contains (keys (reduce merge (map (fn [x] (merge (let [v (:input x)] (if v @v {})) (let [v (:output x)] (if v @v {})))) (vals @(:task-list unit)))))
+          (if-not (vec-contains (filter (fn [x] (not (nil? x))) (flatten (map (fn [x] (conj (let [v (:input x)] (if v (keys @v) [])) (let [v (:output x)] (if v @v nil)))) (vals @(:task-list unit)))))
                                 ch)
             (remove-channel unit ch)))))))
   
@@ -694,7 +693,7 @@
    (let [ch-name (:name (meta channel))]
      (lamina/force-close channel)
      (swap! internal-channel-list dissoc ch-name)
-     (swap! internal-channel-list dissoc ch-name)
+     (swap! external-channel-list dissoc ch-name)
      (swap! total-channel-list dissoc ch-name)
      (send-net _ (package "unsubscribe" (name ch-name)))
      _))
@@ -950,7 +949,7 @@
   
   (kill-task
     [_ task]
-    (t/obliterate task)
+    (t/obliterate task);
     (swap! task-list dissoc (:name task))))
 
 (defn wait-for-lock
@@ -1131,27 +1130,27 @@
         (reset! found true)
         (println "Server found")
 ;        (write-to-terminal "Server found")
-        (instruction unit [START-TCP-CLIENT (get neighbors k) 8998]))
+        (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])))
       
-      ;When a server isn't in existence, the LOWEST ip starts the server!
+    ;When a server isn't in existence, the LOWEST ip starts the server!
       
-      (when (not @found)
-        (if (= (first neighbor-ips) (:ip-address unit))
+    (when (not @found)
+      (if (= (first neighbor-ips) (:ip-address unit))
           
-          ;The case where this unit is the lowest IP
+        ;The case where this unit is the lowest IP
           
-          (do 
-            (println "No server found. Establishing server...")
-            (instruction unit [START-SERVER 8998])
-            (change-server-ip unit (:ip-address unit))
-            (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998]))      
+        (do 
+          (println "No server found. Establishing server...")
+          (instruction unit [START-SERVER 8998])
+          (change-server-ip unit (:ip-address unit))
+          (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998]))      
           
-          ;The case where this unit is NOT the lowest ip
+        ;The case where this unit is NOT the lowest ip
           
-          (do
-            (change-server-ip unit (first neighbor-ips))
-            (println "Connecting to: " @(:server-ip unit))
-            (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998]))))))
+        (do
+          (change-server-ip unit (first neighbor-ips))
+          (println "Connecting to: " @(:server-ip unit))
+          (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])))))
   
   ;Check @ 'heartbeat' if the connection to the server is still alive
   
@@ -1164,3 +1163,6 @@
       
       (if on-disconnect
         (on-disconnect)))))
+
+
+

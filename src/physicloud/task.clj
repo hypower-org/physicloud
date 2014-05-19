@@ -209,7 +209,7 @@
       (swap! tasks assoc name (.scheduleAtFixedRate exec (fn [] (function (merge {:this this} (get-state this)))) delay period TimeUnit/MILLISECONDS)))
     this))
 
-(defrecord ^{:private true} TimeTaskP [output state function name ^Channel channel ^Integer update-time ^String type produces]
+(defrecord ^{:private true} TimeTaskP [output function name ^Channel channel ^Integer update-time ^String type produces]
   
   TaskInternals
   
@@ -221,7 +221,7 @@
   
   (produce
     [this]   
-    (lamina/enqueue @output {produces (function (merge {:this this} (get-state this)))})
+    (lamina/enqueue @output {produces (function {:this this})})
     this)
   
   (add-outbound
@@ -257,12 +257,13 @@
   
   (state-change 
    [this data] 
-   (if (map? data)
-     (swap! state merge @state data)))
+   (println "This operation is not available for a producing task")
+    this)
   
   (get-state
     [this]
-    @state)  
+    (println "This operation is not available for a producing task")
+    this)  
   
   (cancel-task 
     [this]
@@ -539,68 +540,68 @@
         (if (empty? (:produces task-config-map))
           
           (TimeTaskE. (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                       (:name task-config-map) 
-                       ch 
-                       (atom (:update-time task-config-map))
-                       (:type task-config-map))
+                      (:name task-config-map) 
+                      ch 
+                      (atom (:update-time task-config-map))
+                      (:type task-config-map))
           
-          (TimeTaskP. (atom nil) (atom {})                                    
-                       (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                       (:name task-config-map) 
-                       ch 
-                       (atom (:update-time task-config-map))
-                       (:type task-config-map)
-                       (keyword (:produces task-config-map))))
+          (TimeTaskP. (atom nil)                           
+                      (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
+                      (:name task-config-map) 
+                      ch 
+                      (atom (:update-time task-config-map))
+                      (:type task-config-map)
+                      (keyword (:produces task-config-map))))
 
         (empty? (:produces task-config-map))
         
         (if (empty? (:consumes task-config-map))
           
           (TimeTaskE. (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                       (:name task-config-map) 
-                       ch 
-                       (atom (:update-time task-config-map))
-                       (:type task-config-map))
+                      (:name task-config-map) 
+                      ch 
+                      (atom (:update-time task-config-map))
+                      (:type task-config-map))
           
           (TimeTaskC. (atom {}) (atom {})                                    
-                       (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                       (:name task-config-map) 
-                       ch 
-                       (atom (:update-time task-config-map))
-                       (:type task-config-map)
-                       (:consumes task-config-map)))
+                      (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
+                      (:name task-config-map) 
+                      ch 
+                      (atom (:update-time task-config-map))
+                      (:type task-config-map)
+                      (:consumes task-config-map)))
         
         :else             
         
         (TimeTaskCP. (atom {}) (atom nil) (atom {})                                    
-                (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                (:name task-config-map) 
-                ch 
-                (atom (:update-time task-config-map))
-                (:type task-config-map)
-                (:consumes task-config-map)
-                (keyword (:produces task-config-map))))
+                     (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
+                     (:name task-config-map) 
+                     ch 
+                     (atom (:update-time task-config-map))
+                     (:type task-config-map)
+                     (:consumes task-config-map)
+                     (keyword (:produces task-config-map))))
       
       (if (empty? (:consumes task-config-map))
         (println "An event task must consume data")
         (if (empty? (:produces task-config-map))
           
           (let [t (EventTaskC. (atom {})
-                            (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                            (:name task-config-map)
-                            ch 
-                            (:type task-config-map)
-                            (:consumes task-config-map))]
+                               (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
+                               (:name task-config-map)
+                               ch 
+                               (:type task-config-map)
+                               (:consumes task-config-map))]
             (with-meta t {:type ::event-task-consumer
                           ::source (fn [] {:function (:function t) :name (:name t) :consumes (:consumes t)})}))
           
           (EventTaskCP. (atom {}) (atom nil) 
-                         (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
-                         (:name task-config-map)
-                         ch 
-                         (:type task-config-map)
-                         (:consumes task-config-map)
-                         (keyword (:produces task-config-map))))))))
+                        (fn [x] (time+ ch (task-error-handler TimeTaskE x ((:function task-config-map) x))))
+                        (:name task-config-map)
+                        ch 
+                        (:type task-config-map)
+                        (:consumes task-config-map)
+                        (keyword (:produces task-config-map))))))))
 
 (defmethod print-method ::event-task-consumer [o ^Writer w]
   (print-method ((::source (meta o))) w))
