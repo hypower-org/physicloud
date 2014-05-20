@@ -233,7 +233,8 @@
   
   (remove-outbounds
     [this]
-    (reset! output nil))
+    (reset! output nil)
+    this)
   
   ConsumeInternals
   
@@ -309,7 +310,8 @@
   
   (remove-outbounds
     [this]
-    (reset! output nil))
+    (reset! output nil)
+    this)
   
   ConsumeInternals
   
