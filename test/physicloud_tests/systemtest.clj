@@ -15,6 +15,7 @@
 
 (defn cloud-function
   [this]
+  ; Do we need to wait for all 5 pieces of data? Shouldn't it be asynchronous? We have a time driven task.
   (if (= (count (vals (t/get-state this))) 5)
     (let [current-agent-states (qda/get-agent-states (into [] (vals (t/get-state this))))]
       (swap! (first plot-data) conj (:x current-agent-states))
@@ -24,6 +25,7 @@
 (defn cloud-agent
   [this]
   (let [state (t/get-state this)]
+    ; why is this happening? Shouldn't we just send in the state for processing by the cloud agent task???
     (when (and (:clouddata state) (not= (:control (:clouddata state)) "used"))
       (swap! (:state this) assoc-in [:clouddata :control] "used")
       (swap! (:state this) assoc :control (:control (:clouddata state)))
