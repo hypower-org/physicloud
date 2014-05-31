@@ -417,7 +417,7 @@
          :or {auto-establish true listen-time 1000}}]
   (if (= name nil)
     (println "We got a nil named task! Options: " opts)
-    (println "We got " name " ...move along."))
+    (println "We got " name "! Options: " opts))
    ;If there isn't a name, generate a random one!
   (let [task-options (if name opts (merge opts {:name (str (gensym "task_"))})) 
         
@@ -732,7 +732,8 @@
     
    (task _ 
          
-         {:function (fn [this] (locking gc-fn (gc-fn _)))
+         {:name "channel-gc"
+          :function (fn [this] (locking gc-fn (gc-fn _)))
          :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
@@ -752,7 +753,8 @@
                              (= code START-SERVER)
                                             
                              (let [server (tcp-server (first payload))]
-                               (task _ {:function (fn [this input-channel]
+                               (task _ {:name "stop-server-task"
+                                        :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
                                                       (kill-task _ (:name this))
                                                       (kill server)))})
@@ -766,7 +768,8 @@
                                             
                              (let [client (tcp-client _ (first payload) (second payload))]
                             
-                               (task _ {:function (fn [this input-channel]
+                               (task _ {:name "stop-client-task"
+                                        :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-TCP-CLIENT)
                                                       (kill-task _ (:name this))
                                                       (lamina/force-close client)))})
@@ -878,25 +881,25 @@
                             (let [code (first data) payload (rest data)]
     
                               (cond
-      
+                                
+                                ; What is this code for? 
                                 (= code ip-address)
                                 
-                                ;This is a temporary solution to this problem.
-                                
+                                ;This is a temporary solution to this problem. What problem?
                                 (do
                                   ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
+                                  
                                   (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
                                                   :type "event"
                                                   :consumes #{(keyword (first payload))}
                                                   :function (fn [map] 
                                                               (if (ping-channel _ (first payload))
                                                                 (send-net _ (package (first payload) (dissoc map :this))) 
-                                                                (do (println "DIEEEE") (kill-task _ (:name (:this map))))))}))
+                                                                (do (println "DIE") (kill-task _ (:name (:this map))))))}))
       
                                 (= code REQUEST-REPEATER)
                                 
                                 ;Requests a repeater.  This portion really hasn't been tested that much.  However, it shouldn't really be needed
-      
                                 (send-net _ (package (first payload) {:ip ip-address}))
         
         
