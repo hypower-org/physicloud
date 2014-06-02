@@ -442,7 +442,7 @@
         (let [new-task (t/task-factory task-options) 
               ch (:channel new-task)]
           
-          (println "Instantiating new time task: " name)        
+;          (println "Instantiating new time task: " name)        
           
           ;If there's any, swap initial data in!
           (if init
@@ -545,7 +545,7 @@
                                    (if-not without-locking
                                      (unlock unit))
                                    (recur)))))))))
-          (println (:name new-task) " generated!")
+;          (println (:name new-task) " generated!")
         
           new-task)
         (println "No update time supplied"))
@@ -553,7 +553,7 @@
       (= type "event")
       (let [new-event-task (t/task-factory task-options) 
             ch (:channel new-event-task)] 
-        (println "Instantiating new event task: " name)
+;        (println "Instantiating new event task: " name)
         (if init
           (swap! (:state new-event-task) merge init))
       
@@ -590,7 +590,7 @@
                    (if-not without-locking
                       (unlock unit))
                     (recur))))))
-        (println (:name new-event-task) " generated!")
+;        (println (:name new-event-task) " generated!")
         new-event-task))))
 
 ;TEST######################################################
@@ -608,6 +608,7 @@
 (defn garbage-collect 
   "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
   [unit]
+;  (println "Collect!")
   (let [ch-list @(:total-channel-list unit)]
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
@@ -753,6 +754,7 @@
                                             
                              (let [server (tcp-server (first payload))]
                                (task _ {:name "stop-server-task"
+                                        :without-locking true
                                         :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
                                                       (kill-task _ (:name this))
@@ -768,6 +770,7 @@
                              (let [client (tcp-client _ (first payload) (second payload))]
                             
                                (task _ {:name "stop-client-task"
+                                        :without-locking true
                                         :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-TCP-CLIENT)
                                                       (kill-task _ (:name this))
@@ -800,6 +803,7 @@
                                ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
                                               
                                (let [broadcast-task (task _ {:name "udp-broadcast"
+                                                             :without-locking true                                                             
                                                              :function (fn 
                                                                          [this input-channel]
                                                                                     
@@ -823,9 +827,10 @@
                                                                                  (lamina/enqueue (nth input-channel 3) @data))))))
                                                              :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
                                               
-                                 ;Make a task for stopping the udp-client
+                                 ;Make a task for stopping the udp-clients
                                  
                                  (task _ {:name "stop-udp-broadcast"
+                                          :without-locking true
                                           :function (fn [this input-channel] 
                                                       (when (= (first input-channel) STOP-UDP-CLIENT)
                                                         
@@ -851,7 +856,8 @@
                                            (task _ {:name "gc-lock"
                                                     :function (fn [this input-channel]
                                                                 (let [code (first input-channel)]
-                                                                   (when (= code UNLOCK-GC)    
+                                                                   (when (= code UNLOCK-GC)
+;                                                                     (println "Unlock time!")
                                                                      (kill-task _ (:name this))
                                                                      (deliver p true))))
                                                     :without-locking true})
