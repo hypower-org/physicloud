@@ -415,9 +415,6 @@
   ; Is auto-establish really needed? Should consumes be in here?
   [unit {:keys [type update-time name function produces auto-establish init listen-time without-locking on-established] :as opts
          :or {auto-establish true listen-time 1000}}]
-  (if (= name nil)
-    (println "We got a nil named task! Options: " opts)
-    (println "We got " name "! Options: " opts))
    ;If there isn't a name, generate a random one!
   (let [task-options (if name opts (merge opts {:name (str (gensym "task_"))})) 
         
