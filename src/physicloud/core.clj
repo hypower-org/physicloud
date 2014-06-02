@@ -545,6 +545,7 @@
                                    (if-not without-locking
                                      (unlock unit))
                                    (recur)))))))))
+          (println (:name new-task) " generated!")
         
           new-task)
         (println "No update time supplied"))
@@ -589,6 +590,7 @@
                    (if-not without-locking
                       (unlock unit))
                     (recur))))))
+        (println (:name new-event-task) " generated!")
         new-event-task))))
 
 ;TEST######################################################
