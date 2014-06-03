@@ -118,10 +118,19 @@
         
         (do                      
           
-          (println (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))))
-      
-          (if (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload)))
-            (lamina/enqueue client-channel (str "kernel|"(second payload)))))
+          ;(println (first (read-string (first payload))))
+          
+          ;(println (:kernel @channel-list))        
+          
+          (let [kernel-list @(:kernel @channel-list) client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
+            ;(println "CTP: " client-to-ping)
+            (when client-to-ping
+              ;(println "KL: " kernel-list)
+              (doseq [i (keys kernel-list)]
+                ;(println i)
+                ;(println (get kernel-list i))
+                (if (= (get kernel-list i) client-to-ping)
+                  (lamina/enqueue i (str "kernel|"(second payload))))))))
       
         (= code "ping-channel")
         
