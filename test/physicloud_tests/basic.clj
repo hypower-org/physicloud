@@ -17,7 +17,7 @@
                      :produces "awesome-data-map"
                      :update-time 2000
                      })
-
+;
 (core/task test-cpu {:name "consumer"
                      :function (fn [this awesome-data-map]
                                  (println (vector (str (keys awesome-data-map)) (str (vals awesome-data-map)))))

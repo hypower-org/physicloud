@@ -25,6 +25,6 @@
                             :produces "agent-one-data" :consumes #{:clouddata}
                             :init {:x [0 0 0 0 0] :y [0 0 0 0 0] :control [3 3 3 3] :number 0}))
 
-
+; Need to use new cpu and task construction api!
 (set-agent-ip "10.42.43.3")
 (init-monitor)

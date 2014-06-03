@@ -1,10 +1,8 @@
 (ns physicloud-tests.systemtest
-  (:require [lamina.core :as lamina]
-            [physicloud.core :as core]
+  (:require [physicloud.core :as core]
             [physicloud.task :as t]
             [physicloud-tests.quasidecent-algorithm :as qda])
-  (:use [physicloud-tests.newnetworking]
-        [incanter.stats]
+  (:use [incanter.stats]
         [incanter.charts]
         [incanter.core]))
 
@@ -14,31 +12,44 @@
 (def plot-data  [(atom []) (atom [])])
 
 (defn cloud-function
-  [this]
-  (if (= (count (vals (t/get-state this))) 5)
-    (let [current-agent-states (qda/get-agent-states (into [] (vals (t/get-state this))))]
+  [a1-data a2-data a3-data a4-data a5-data]
+  (let [current-agent-states (qda/get-agent-states [a1-data a2-data a3-data a4-data a5-data])] ;
+    ; plotting mechanism
       (swap! (first plot-data) conj (:x current-agent-states))
       (swap! (second plot-data) conj (:y current-agent-states))
-      {:control (qda/u-step (:control (:agent-one-data (t/get-state this))) qda/ro qda/global-constraints current-agent-states) :position current-agent-states})))
+      ; algorithm for the cloud computation
+      {:control (qda/u-step (:control (:agent-one-data (t/get-state this))) qda/ro qda/global-constraints current-agent-states) 
+       :position current-agent-states})
+  )
 
-(defn cloud-agent
-  [this]
+(defn cloud-agent 
+  [cloud-data-map]
+  (; new functionality based on the cloud-data-map structure
+    )
+  
   (let [state (t/get-state this)]
+    ; Start indexing into the cloud-data map = {:control beans :position carrots}
+    ; Now, (:clouddata state) is simply cloud-data-map
     (when (and (:clouddata state) (not= (:control (:clouddata state)) "used"))
       (swap! (:state this) assoc-in [:clouddata :control] "used")
       (swap! (:state this) assoc :control (:control (:clouddata state)))
       (swap! (:state this) assoc :x (:x (:position (:clouddata state))))
       (swap! (:state this) assoc :y (:y (:position (:clouddata state)))))
     (let [new-state (qda/state-step state qda/ro qda/vs qda/del-global-constraints)]
+      ; locally update the x and y state to update local value
       (swap! (:state this) assoc-in [:x (:number state)] (first new-state))
       (swap! (:state this) assoc-in [:y (:number state)] (second new-state)))
-    state))
+    state)
+  ; return the current agent state for publishing
+  )
 
-(def cloud-channel (channel-factory (keyword (gensym)) :clouddata))
-  
-;(def cloud-agent-one (kernel/task :type "time" :update-time 5 :name "cloud-agent-one" :function cloud-agent 
-;                            :produces "agent-one-data" :consumes #{:clouddata}
-;                            :init {:x [0 0 0 0 0] :y [0 0 0 0 0] :control [3 3 3 3] :number 0}))
+; Need to refactor all of the tasks into the new PhysiCloud framework!
+; "this" is the task record that invokes the function
+; :number needs to be there in the map - tells them which id they are
+
+(def cloud-agent-one (kernel/task :type "time" :update-time 5 :name "cloud-agent-one" :function cloud-agent 
+                            :produces "agent-one-data" :consumes #{:clouddata}
+                            :init {:x [0 0 0 0 0] :y [0 0 0 0 0] :control [3 3 3 3] :number 0}))
 
 (def cloud-agent-two (core/task :type "time" :update-time 500 :name "cloud-agent-two" :function cloud-agent 
                             :produces "agent-two-data" :consumes #{:clouddata}
@@ -90,6 +101,14 @@
             (view))
           nil)))))
 
-; Deprecated!
-;(set-agent-ip "10.42.43.3")
-;(init-monitor)
+; Create the local CPU
+(def main-cpu (core/cyber-physical-unit 127.0.0.1))
+
+; Allocate the agent and cloud tasks onto the main-cpu
+(core/task cloud-agent {:name "cloud-agent"
+                        :function (fn [this a1-data a2-data a3-data a4-data a5-data]
+                                    (cloud-function ))
+                        })
+
+(core/task a-one 
+           )

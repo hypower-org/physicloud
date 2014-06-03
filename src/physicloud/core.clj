@@ -238,7 +238,7 @@
     
         client))))
 
-(defn genchan
+(defn ^{:private true} genchan
   "Finds a channel with the given data-type.  Will look over the network for it.
 
    @lock Determines if the function call will lock the unit's garbage collector.  Default is 'true'
@@ -375,7 +375,7 @@
   [unit {:keys [function consumes produces update-time name auto-establish without-locking on-established additional init]}]
   (let [args# (second function)]
     
-    `(task-helper ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
+    `(task-builder ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
                          :consumes ~(set (doall (map keyword (rest args#))))
                          :produces ~produces
                          :name ~name
@@ -387,7 +387,7 @@
                          :without-locking ~without-locking
                          :init ~init})))
 
-(defn task-helper
+(defn task-builder
   
   "The function for creating tasks.
 
@@ -396,7 +396,7 @@
       Fields with a T are required for time-driven tasks
 
       :type time or event *
-      :updated-time ; The update-time for a time-driven task T
+      :update-time ; The update-time for a time-driven task T
       :name The name of the task 
       :function The function of the task *
       :consumes The data-types that the task consumes E
@@ -412,11 +412,11 @@
              :init {:data-type-1 [0 0 0] :data-type-2 [1 2 3]}
              :listen-time 1000)"
   
+  ; Is auto-establish really needed? Should consumes be in here?
   [unit {:keys [type update-time name function produces auto-establish init listen-time without-locking on-established] :as opts
          :or {auto-establish true listen-time 1000}}]
-
    ;If there isn't a name, generate a random one!
-  (let [opts (if name opts (merge opts {:name (str (gensym "task_"))})) 
+  (let [task-options (if name opts (merge opts {:name (str (gensym "task_"))})) 
         
         task-list (:task-list unit) 
         
@@ -427,56 +427,44 @@
     (cond
     
       ;Check if a task with the given name already exists...
-      
-      (contains? @task-list (:name opts))
-    
-      (println "A task with that name already exists!")
+      (contains? @task-list (:name task-options)) (println "A task with that name already exists!")
       
       ;Make sure a type was supplised...
-    
-      (not type)
-    
-      (println "No type supplied (time or event)") 
+      (not type) (println "No type supplied (time or event)") 
       
       ;Make sure a function was supplied...
-  
-      (not function) 
-    
-      (println "No function supplied")
+      (not function) (println "No function supplied") ; We should kick this out! Otherwise, it makes a nil task!
   
       (= type "time")
-    
       ;If it's a time driven task...
-    
       (if update-time
-        
-        ;Make the task!
-        
-        (let [a (t/task-factory opts) 
-              ch (:channel a)]   
+
+        (let [new-task (t/task-factory task-options) 
+              ch (:channel new-task)]
+          
+;          (println "Instantiating new time task: " name)        
           
           ;If there's any, swap initial data in!
-          
           (if init
-            (swap! (:state a) merge init))
+            (swap! (:state new-task) merge init))
           
           ;Put the task into the task-list!
-          (swap! task-list assoc (:name opts) a)   
+          (swap! task-list assoc (:name task-options) new-task)   
                   
           ;When the task is supposed to be automatically established...
           
           (when auto-establish
             (let [channel-list (merge @internal-channel-list @external-channel-list)]   
               
-              (if (:produces a)
+              (if (:produces new-task)
                 
-                (if (empty? (:consumes a))
+                (if (empty? (:consumes new-task))
               
                   ;If it doesn't consume but it produces, generate the output channel, make the task publish to it, and schedule its function!
                   (do
-                    (internal-channel unit (:produces a))
-                    (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
-                    (t/schedule-task a update-time 0))
+                    (internal-channel unit (:produces new-task))
+                    (t/add-outbound new-task (get (merge @internal-channel-list @external-channel-list) (:produces new-task)))
+                    (t/schedule-task new-task update-time 0))
               
                   ;If the task consumes something, do it in the background.  Who wants to wait for that!
                     
@@ -489,21 +477,21 @@
                                (wait-for-lock unit))
                                
                              ;For any types the task consumes, try to generate channels for them!
-                             (doseq [i (:consumes a)]
+                             (doseq [i (:consumes new-task)]
                                (genchan unit i :listen-time listen-time :lock false))
                                
                              ;If all my dependencies are satisfied...
                                
-                             (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
+                             (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes new-task)))]
                                    (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                                  
                                ;Set up the publishing and listening for a task!
                                (do
-                                 (internal-channel unit (:produces a))
-                                 (t/add-outbound a (get (merge @internal-channel-list @external-channel-list) (:produces a)))
-                                 (doseq [c (:consumes a)]
-                                   (t/attach a (c (merge @internal-channel-list @external-channel-list))))
-                                 (t/schedule-task a update-time 0)
+                                 (internal-channel unit (:produces new-task))
+                                 (t/add-outbound new-task (get (merge @internal-channel-list @external-channel-list) (:produces new-task)))
+                                 (doseq [c (:consumes new-task)]
+                                   (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
+                                 (t/schedule-task new-task update-time 0)
                                    
                                  ;If the task is supposed to do something when it's established...
                                    
@@ -522,11 +510,11 @@
                                    (unlock unit))
                                  (recur))))))
             
-                (if (empty? (:consumes a))      
+                (if (empty? (:consumes new-task))      
                   
                   ;If the task doesn't consume or produce, just schedule the "empty task"
                   
-                  (t/schedule-task a update-time 0)
+                  (t/schedule-task new-task update-time 0)
                   
                   ;Otherwise, do the same thing as above for finding dependencies!  However, this time there isn't anything to produce.  So, don't add any
                   ;channel to which to publish.
@@ -538,14 +526,14 @@
                              (if-not without-locking
                                (wait-for-lock unit))
                              
-                               (doseq [i (:consumes a)]
+                               (doseq [i (:consumes new-task)]
 		                               (genchan unit i :listen-time listen-time :lock false))
-                               (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a)))]
+                               (if (let [all-depedencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes new-task)))]
                                      (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                                  (do
-                                   (doseq [c (:consumes a)]
-                                     (t/attach a (c (merge @internal-channel-list @external-channel-list))))
-                                   (t/schedule-task a update-time 0)
+                                   (doseq [c (:consumes new-task)]
+                                     (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
+                                   (t/schedule-task new-task update-time 0)
                                    
                                    (if on-established
                                      (on-established))
@@ -557,20 +545,19 @@
                                    (if-not without-locking
                                      (unlock unit))
                                    (recur)))))))))
+;          (println (:name new-task) " generated!")
         
-          a)
+          new-task)
         (println "No update time supplied"))
-    
+      
       (= type "event")
-    
-  
-      (let [a (t/task-factory opts) 
-            ch (:channel a)] 
-      
+      (let [new-event-task (t/task-factory task-options) 
+            ch (:channel new-event-task)] 
+;        (println "Instantiating new event task: " name)
         (if init
-          (swap! (:state a) merge init))
+          (swap! (:state new-event-task) merge init))
       
-        (swap! task-list assoc (:name opts) a)        
+        (swap! task-list assoc (:name task-options) new-event-task)        
       
         (if auto-establish        
                  
@@ -582,16 +569,16 @@
               (if-not without-locking
                 (wait-for-lock unit))
               
-                (doseq [i (:consumes a)]
+                (doseq [i (:consumes new-event-task)]
                   (genchan unit i :listen-time listen-time :lock false))
-                (if (let [all-depedencies (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes a))]
+                (if (let [all-depedencies (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes new-event-task))]
                       (= (count (filter (fn [x] (= x true)) all-depedencies)) (count all-depedencies)))
                   (do
-                    (doseq [c (:consumes a)]     
-                      (t/attach a (c (merge @internal-channel-list @external-channel-list))))
-                    (when (:produces a)
-                      (internal-channel unit (:produces a))
-                      (t/add-outbound a ((:produces a) (merge @internal-channel-list @external-channel-list))))
+                    (doseq [c (:consumes new-event-task)]     
+                      (t/attach new-event-task (c (merge @internal-channel-list @external-channel-list))))
+                    (when (:produces new-event-task)
+                      (internal-channel unit (:produces new-event-task))
+                      (t/add-outbound new-event-task ((:produces new-event-task) (merge @internal-channel-list @external-channel-list))))
                     
                     (if on-established
                       (on-established))
@@ -603,7 +590,8 @@
                    (if-not without-locking
                       (unlock unit))
                     (recur))))))
-        a))))
+;        (println (:name new-event-task) " generated!")
+        new-event-task))))
 
 ;TEST######################################################
 
@@ -620,6 +608,7 @@
 (defn garbage-collect 
   "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
   [unit]
+;  (println "Collect!")
   (let [ch-list @(:total-channel-list unit)]
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
@@ -743,7 +732,8 @@
     
    (task _ 
          
-         {:function (fn [this] (locking gc-fn (gc-fn _)))
+         {:name "channel-gc"
+          :function (fn [this] (locking gc-fn (gc-fn _)))
          :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
@@ -763,7 +753,9 @@
                              (= code START-SERVER)
                                             
                              (let [server (tcp-server (first payload))]
-                               (task _ {:function (fn [this input-channel]
+                               (task _ {:name "stop-server-task"
+                                        :without-locking true
+                                        :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
                                                       (kill-task _ (:name this))
                                                       (kill server)))})
@@ -777,7 +769,9 @@
                                             
                              (let [client (tcp-client _ (first payload) (second payload))]
                             
-                               (task _ {:function (fn [this input-channel]
+                               (task _ {:name "stop-client-task"
+                                        :without-locking true
+                                        :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-TCP-CLIENT)
                                                       (kill-task _ (:name this))
                                                       (lamina/force-close client)))})
@@ -809,6 +803,7 @@
                                ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
                                               
                                (let [broadcast-task (task _ {:name "udp-broadcast"
+                                                             :without-locking true                                                             
                                                              :function (fn 
                                                                          [this input-channel]
                                                                                     
@@ -832,9 +827,10 @@
                                                                                  (lamina/enqueue (nth input-channel 3) @data))))))
                                                              :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
                                               
-                                 ;Make a task for stopping the udp-client
+                                 ;Make a task for stopping the udp-clients
                                  
                                  (task _ {:name "stop-udp-broadcast"
+                                          :without-locking true
                                           :function (fn [this input-channel] 
                                                       (when (= (first input-channel) STOP-UDP-CLIENT)
                                                         
@@ -860,7 +856,8 @@
                                            (task _ {:name "gc-lock"
                                                     :function (fn [this input-channel]
                                                                 (let [code (first input-channel)]
-                                                                   (when (= code UNLOCK-GC)    
+                                                                   (when (= code UNLOCK-GC)
+;                                                                     (println "Unlock time!")
                                                                      (kill-task _ (:name this))
                                                                      (deliver p true))))
                                                     :without-locking true})
@@ -889,25 +886,25 @@
                             (let [code (first data) payload (rest data)]
     
                               (cond
-      
+                                
+                                ; What is this code for? 
                                 (= code ip-address)
                                 
-                                ;This is a temporary solution to this problem.
-                                
+                                ;This is a temporary solution to this problem. What problem?
                                 (do
                                   ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
-                                  (task-helper _ {:name (str "siphon -> " (first payload) " -> " (second payload))
+                                  
+                                  (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
                                                   :type "event"
                                                   :consumes #{(keyword (first payload))}
                                                   :function (fn [map] 
                                                               (if (ping-channel _ (first payload))
                                                                 (send-net _ (package (first payload) (dissoc map :this))) 
-                                                                (do (println "DIEEEE") (kill-task _ (:name (:this map))))))}))
+                                                                (do (println "DIE") (kill-task _ (:name (:this map))))))}))
       
                                 (= code REQUEST-REPEATER)
                                 
                                 ;Requests a repeater.  This portion really hasn't been tested that much.  However, it shouldn't really be needed
-      
                                 (send-net _ (package (first payload) {:ip ip-address}))
         
         
