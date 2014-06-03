@@ -4,24 +4,29 @@
             [lamina.core :as lamina])
   (:gen-class))
 
+(defn producerfn []
+  (println "Producer producing...") {:producer "42"})
+
 (defn  -main [x]
  (def test-cpu (core/cyber-physical-unit (str x)))
-  
- (lamina/receive-all (:kernel @(:total-channel-list test-cpu)) println)
  
+ (core/instruction test-cpu [core/START-SERVER 8998])
  
-  
- (def server (lamina/wait-for-message (core/instruction test-cpu [core/START-SERVER 8998])))
- (core/instruction test-cpu [core/START-TCP-CLIENT "10.10.10.5" 8998]))
+ (core/instruction test-cpu [core/START-TCP-CLIENT "10.10.10.5" 8998])
+ 
+ (core/task test-cpu {:name "producer"
+                     :function (fn [this] (producerfn))
+                     :produces "awesome-data-map"
+                     :update-time 2000
+                     }))  
+ 
  
 ; (lamina/receive-all (:kernel @(:total-channel-list test-cpu)) println)
-
-;(defn producerfn []
-;  (println "Producer producing...") {:producer "42"})
-;)
-
-
-
+ 
+;(def server (lamina/wait-for-message (core/instruction test-cpu [core/START-SERVER 8998])))
+; (core/instruction test-cpu [core/START-TCP-CLIENT "10.10.10.5" 8998]))
+ 
+; (lamina/receive-all (:kernel @(:total-channel-list test-cpu)) println)
 
 ;(core/on-pool t/exec (core/into-physicloud test-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
 
@@ -29,5 +34,4 @@
 ;                     :function (fn [this] (producerfn))
 ;                     :produces "awesome-data-map"
 ;                     :update-time 2000
-;                     }))
-
+;                     })
