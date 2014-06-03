@@ -1,4 +1,4 @@
-(defproject PhysiCloud "0.1.0-SNAPSHOT"
+(defproject PhysiCloud "consumer"
   :description "PhysiCloud: A software platform to facilitate the programming of cyber-physical systems."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
@@ -12,9 +12,13 @@
                  [criterium "0.4.3"]
                  [org.clojure/data.csv "0.1.2"]
                  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
-                 [incanter/incanter-core "1.5.4"]
-                 [incanter/incanter-charts "1.5.4"]
-                 [incanter "1.5.4"]
-                 [incanter/incanter-pdf "1.5.4"]
+                 ;[incanter/incanter-core "1.5.4"]
+                 ;[incanter/incanter-charts "1.5.4"]
+                 ;[incanter "1.5.4"]
+                 ;[incanter/incanter-pdf "1.5.4"]
                  [clojure-lanterna "0.9.4"]
-                 [seesaw "1.4.4"]])
+                 ;[seesaw "1.4.4"]
+                 ]
+  :main physicloud-tests.consumer
+  :aot  [physicloud-tests.consumer])
+

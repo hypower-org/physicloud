@@ -115,9 +115,13 @@
         (= code "ping")
         
         ;Tell a SINGLE client that they are receiving a ping!
+        
+        (do                      
+          
+          (println (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))))
       
-        (if (> (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))) 0)
-          (lamina/enqueue client-channel (str "kernel|"(second payload))))
+          (if (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload)))
+            (lamina/enqueue client-channel (str "kernel|"(second payload)))))
       
         (= code "ping-channel")
         
@@ -1156,13 +1160,15 @@
   
   (loop []
     (Thread/sleep heartbeat)
-    (if (ping-cpu unit (:ip-address unit))
-      (recur)
+    (let [ping-attempt (ping-cpu unit (:ip-address unit))]
+      (println ping-attempt)
+      (if ping-attempt
+        (recur)
       
-      ;If there is supposed to be a function run on disconnect, run it!
+        ;If there is supposed to be a function run on disconnect, run it!
       
-      (if on-disconnect
-        (on-disconnect)))))
+        (if on-disconnect
+          (on-disconnect))))))
 
 
 
