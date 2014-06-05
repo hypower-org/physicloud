@@ -5,12 +5,12 @@
 
 
 (defn -main [x]
-	(def robot-control-cpu (core/cyber-physical-unit (str x)))
+	(def awesome-data-map (core/cyber-physical-unit (str x)))
 	
-	(core/on-pool t/exec (core/into-physicloud robot-control-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
+	(core/on-pool t/exec (core/into-physicloud awesome-data-map  :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
 	
-	(core/task robot-control-cpu {:name "consumer"
-	                              :function (fn [this robot-control-data]
-	                                          (println robot-control-data))
-                              }))
+	(core/task awesome-data-map {:name "consumer"
+	                               :function (fn [this robot-control-data]
+	                                           (println robot-control-data))
+                               }))
 
