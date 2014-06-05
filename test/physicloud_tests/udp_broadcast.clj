@@ -10,4 +10,4 @@
                                                                      (println (:message message)))))
     )
 (defn send-msg [ip p]
-  (lamina/enqueue broadcast-channel {:message (str "hello?:" ip ":" p) :host "255.255.255.255" :port 50000}))
+  (lamina/enqueue broadcast-channel {:message (str "hello?:" ip ":" p) :host "10.10.255.255" :port 50000}))
