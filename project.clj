@@ -1,4 +1,4 @@
-(defproject PhysiCloud "consumer"
+(defproject PhysiCloud "robotdriver"
   :description "PhysiCloud: A software platform to facilitate the programming of cyber-physical systems."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
@@ -19,7 +19,6 @@
                  [clojure-lanterna "0.9.4"]
                  [seesaw "1.4.4"]
                  ]
-  ;:main physicloud-tests.consumer
-  ;:aot  [physicloud-tests.consumer]
-            )
+  :main physicloud-tests.robotdriver
+  :aot  [physicloud-tests.robotdriver])
 
