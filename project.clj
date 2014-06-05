@@ -17,8 +17,9 @@
                  ;[incanter "1.5.4"]
                  ;[incanter/incanter-pdf "1.5.4"]
                  [clojure-lanterna "0.9.4"]
-                 [seesaw "1.4.4"]
+                 ;[seesaw "1.4.4"]
                  ]
-  :main physicloud-tests.robotdriver
-  :aot  [physicloud-tests.robotdriver])
+  ;:main physicloud-tests.robotdriver
+  ;:aot  [physicloud-tests.robotdriver]
+            )
 
