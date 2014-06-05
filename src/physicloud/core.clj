@@ -153,7 +153,7 @@
             (doseq [i (keys @c-list)]
               (when (= (lamina/enqueue i msg) :lamina/closed!)
                 (swap! c-list dissoc i)
-                (if (empty? c-list)
+                (if (empty? @c-list)
                   (swap! channel-list dissoc (keyword code)))))))))))
 
 (defprotocol ITCPServer
@@ -453,9 +453,7 @@
       (if update-time
 
         (let [new-task (t/task-factory task-options) 
-              ch (:channel new-task)]
-          
-;          (println "Instantiating new time task: " name)        
+              ch (:channel new-task)]       
           
           ;If there's any, swap initial data in!
           (if init
@@ -558,7 +556,6 @@
                                    (if-not without-locking
                                      (unlock unit))
                                    (recur)))))))))
-;          (println (:name new-task) " generated!")
         
           new-task)
         (println "No update time supplied"))
@@ -566,7 +563,6 @@
       (= type "event")
       (let [new-event-task (t/task-factory task-options) 
             ch (:channel new-event-task)] 
-;        (println "Instantiating new event task: " name)
         (if init
           (swap! (:state new-event-task) merge init))
       
@@ -603,7 +599,6 @@
                    (if-not without-locking
                       (unlock unit))
                     (recur))))))
-;        (println (:name new-event-task) " generated!")
         new-event-task))))
 
 ;TEST######################################################
@@ -621,7 +616,6 @@
 (defn garbage-collect 
   "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
   [unit]
-;  (println "Collect!")
   (let [ch-list @(:total-channel-list unit)]
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
@@ -810,7 +804,6 @@
                                           (cond
                                             (= code "hello?") (lamina/enqueue udp-client-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
                                             (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
-                               
                                (lamina/receive-all udp-client-channel cb)       
                                
                                ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
@@ -819,7 +812,7 @@
                                                              :without-locking true                                                             
                                                              :function (fn 
                                                                          [this input-channel]
-                                                                                    
+                                                                          ;(lamina/enqueue (udp-client-channel "HERES SOME DATA FOR YOUR CHANNEL")  )        
                                                                          (when (= (first input-channel) UDP-BROADCAST)
                                                                            
                                                                            (reset! data {})
@@ -832,12 +825,12 @@
 
                                                                              (loop [i intervals]
                                                                                (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})
-                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 10)))]
+                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 20)))]
                                                                                  (lamina/enqueue udp-client-channel msg))
                                                                                (Thread/sleep interval-time)
                                                                                (if (> i 0)
                                                                                  (recur (dec i))
-                                                                                 (lamina/enqueue (nth input-channel 3) @data))))))
+                                                                                 (lamina/enqueue (nth input-channel 3) @data))))));;;;;;;;;;;;;;;;;;;;;;;;;;;
                                                              :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
                                               
                                  ;Make a task for stopping the udp-clients
@@ -870,7 +863,6 @@
                                                     :function (fn [this input-channel]
                                                                 (let [code (first input-channel)]
                                                                    (when (= code UNLOCK-GC)
-;                                                                     (println "Unlock time!")
                                                                      (kill-task _ (:name this))
                                                                      (deliver p true))))
                                                     :without-locking true})
@@ -883,9 +875,8 @@
                                            
                                            @p)))                                      
                                             
-                             :default
-                                           
-                             nil))))
+                             :else
+                              (println code)))))
         
     (lamina/receive-all (internal-channel _ :kernel)  
                         
@@ -990,7 +981,7 @@
   ;Construct a cpu.  Give it a bunch of maps to store stuff in, an IP, a server ip (atomic so that it can change), a variable to determine if the CPU is still
   
   ;"alive", and an anonymous function containing the garbage collector!
-  
+                          ;                   [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive]
   (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true)) (fn [x] (garbage-collect x)))]
     (with-meta new-cpu
       {:type ::cyber-physical-unit
@@ -1113,7 +1104,6 @@
   ;Make the UDP client and wait for it to be initialized!
   
   @(lamina/read-channel (instruction unit [START-UDP-CLIENT]))
-  
   (let [
         
         ;Make an atom for convenience
@@ -1121,6 +1111,7 @@
         found (atom false) 
         
         ;Get my neighbors via UDP broadcast!
+        
         
         neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST 5 250]))
         
@@ -1150,13 +1141,13 @@
     (when (not @found)
       (if (= (first neighbor-ips) (:ip-address unit))
           
-        ;The case where this unit is the lowest IP
+       ;The case where this unit is the lowest IP
           
-        (do 
-          (println "No server found. Establishing server...")
-          (instruction unit [START-SERVER 8998])
-          (change-server-ip unit (:ip-address unit))
-          (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998]))      
+       (do 
+        (println "No server found. Establishing server...")
+        (instruction unit [START-SERVER 8998])
+        (change-server-ip unit (:ip-address unit))
+        (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998]))     
           
         ;The case where this unit is NOT the lowest ip
           
@@ -1170,7 +1161,6 @@
   (loop []
     (Thread/sleep heartbeat)
     (let [ping-attempt (ping-cpu unit (:ip-address unit))]
-      (println ping-attempt)
       (if ping-attempt
         (recur)
       
