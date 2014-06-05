@@ -825,7 +825,7 @@
 
                                                                              (loop [i intervals]
                                                                                (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})
-                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 20)))]
+                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 255)))]
                                                                                  (lamina/enqueue udp-client-channel msg))
                                                                                (Thread/sleep interval-time)
                                                                                (if (> i 0)

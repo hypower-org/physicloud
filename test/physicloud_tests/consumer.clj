@@ -6,12 +6,19 @@
  )
 
 (defn -main [x]
-(def test-cpu (core/cyber-physical-unit (str x)))
+(def robot-control-cpu (core/cyber-physical-unit (str x)))
 
 ;(defn producerfn []
 ;  (println "Producer producing...") {:producer "42"})
 
-(core/on-pool t/exec (core/into-physicloud test-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
+(core/on-pool t/exec (core/into-physicloud robot-control-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
+
+(core/task robot-control-cpu {:name "consumer"
+                              :function (fn [this robot-control-data]
+                                          (println robot-control-data))
+                              })
+
+
 )
 
 ;(core/task test-cpu {:name "consumer"
