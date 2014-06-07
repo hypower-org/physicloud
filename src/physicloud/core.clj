@@ -645,7 +645,8 @@
   
   (kill-task [_ task] "Removes a given task from memory and stops all of its functionality."))
 
-(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive]
+(defrecord Cyber-Physical-Unit 
+  [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip ^Channel udp-socket-channel udp-port alive?]
 
  ICPUChannel
   
@@ -726,10 +727,19 @@
     
    (internal-channel _ :network-out-channel)
    (swap! total-channel-list assoc :network-in-channel (async/chan (async/sliding-buffer 100))) 
+   
+   ; Attach a UDP discovery listener callback to the socket.
+   (let [data (atom {})
+         udp-listener-cb (fn udp-client-actions
+                                        [^String message]
+                                        (println (:message message) )
+                                        (let [^String code (first (split (:message message) #"\s+")) ^String sender (:host message)]
+                                          (cond
+                                            (= code "hello?") (lamina/enqueue (:udp-socket-channel _) {:host sender :port (:udp-port _) :message (str "hello! " @server-ip)})
+                                            (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
+     (lamina/receive-all (:udp-socket-channel _) udp-listener-cb))
     
-    
-   ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.
-    
+   ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.    
    (task _ 
          
          {:name "channel-gc"
@@ -778,67 +788,67 @@
                                
                                (lamina/enqueue (last payload) client))
                                             
+                             ;START-UDP-CLIENT expects [OP-CODE]
                              (= code START-UDP-CLIENT)
                              
-                             ;START-UDP-CLIENT expects [OP-CODE]
-                             
-                             (let [^Channel udp-client-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port 8999 :frame (gloss/string :utf-8) :broadcast true}))
-                                                  
-                                   data (atom {})
-                                                 
-                                   ;The UDP broadcasting follows a certain protocol!  If hello? is sent, the CPUs listening respond with hello! and the server that they are 
-                                   
-                                   ;connect to's ip!
-                                   
-                                   cb (fn udp-client-actions
-                                        [^String message]
-                                        (println message)
-                                        (let [^String code (first (split (:message message) #"\s+")) ^String sender (:host message)]
-                                          (cond
-                                            (= code "hello?") (lamina/enqueue udp-client-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
-                                            (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
-                               
-                               (lamina/receive-all udp-client-channel cb)       
-                               
-                               ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
-                                              
-                               (let [broadcast-task (task _ {:name "udp-broadcast"
-                                                             :without-locking true                                                             
-                                                             :function (fn 
-                                                                         [this input-channel]
-                                                                                    
-                                                                         (when (= (first input-channel) UDP-BROADCAST)
-                                                                           
-                                                                           (reset! data {})
-                                                                                        
-                                                                           (let [intervals (second input-channel)
-                                                                                              
-                                                                                 interval-time (nth input-channel 2)
-                                                                                 
-                                                                                 ip-addr-str (str (join "." (subvec (split ip-address #"\.") 0 3)) ".")]                                                                                          
-
-                                                                             (loop [i intervals]
-                                                                               (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})
-                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 10)))]
-                                                                                 (lamina/enqueue udp-client-channel msg))
-                                                                               (Thread/sleep interval-time)
-                                                                               (if (> i 0)
-                                                                                 (recur (dec i))
-                                                                                 (lamina/enqueue (nth input-channel 3) @data))))))
-                                                             :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
-                                              
-                                 ;Make a task for stopping the udp-clients
-                                 
-                                 (task _ {:name "stop-udp-broadcast"
-                                          :without-locking true
-                                          :function (fn [this input-channel] 
-                                                      (when (= (first input-channel) STOP-UDP-CLIENT)
-                                                        
-                                                        ;If killed, close the UDP channel, remove this task, and remove the broadcasting task
-                                                        
-                                                        (lamina/force-close udp-client-channel)
-                                                        (kill-task _ (:name this))
-                                                        (kill-task _ (:name broadcast-task))))})))                                                 
+                             (println "We used to start it - now it will be constructed with the CPU.")
+;                             (let [^Channel udp-client-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port 8999 :frame (gloss/string :utf-8) :broadcast true}))
+;                                                  
+;                                   data (atom {})
+;                                                 
+;                                   ;The UDP broadcasting follows a certain protocol!  If hello? is sent, the CPUs listening respond with hello! and the server that they are 
+;                                   
+;                                   ;connect to's ip!
+;                                   
+;                                   udp-listener-cb (fn udp-client-actions
+;                                        [^String message]
+;                                        (println message)
+;                                        (let [^String code (first (split (:message message) #"\s+")) ^String sender (:host message)]
+;                                          (cond
+;                                            (= code "hello?") (lamina/enqueue udp-client-channel {:host sender :port (:udp-port _) :message (str "hello! " @server-ip)})
+;                                            (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
+;                               
+;                               (lamina/receive-all udp-client-channel udp-listener-cb)       
+;                               
+;                               ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
+;                                              
+;                               (let [broadcast-task (task _ {:name "udp-broadcast"
+;                                                             :without-locking true                                                             
+;                                                             :function (fn 
+;                                                                         [this input-channel]
+;                                                                                    
+;                                                                         (when (= (first input-channel) UDP-BROADCAST)
+;                                                                           
+;                                                                           (reset! data {})
+;                                                                                        
+;                                                                           (let [intervals (second input-channel)
+;                                                                                              
+;                                                                                 interval-time (nth input-channel 2)
+;                                                                                 
+;                                                                                 ip-addr-str (str (join "." (subvec (split ip-address #"\.") 0 3)) ".")]                                                                                          
+;
+;                                                                             (loop [i intervals]
+;                                                                               (doseq [msg (map (fn [x] {:host x :port (:udp-port _) :message "hello?"})
+;                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 10)))]
+;                                                                                 (lamina/enqueue udp-client-channel msg))
+;                                                                               (Thread/sleep interval-time)
+;                                                                               (if (> i 0)
+;                                                                                 (recur (dec i))
+;                                                                                 (lamina/enqueue (nth input-channel 3) @data))))))
+;                                                             :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
+;                                              
+;                                 ;Make a task for stopping the udp-clients
+;                                 
+;                                 (task _ {:name "stop-udp-broadcast"
+;                                          :without-locking true
+;                                          :function (fn [this input-channel] 
+;                                                      (when (= (first input-channel) STOP-UDP-CLIENT)
+;                                                        
+;                                                        ;If killed, close the UDP channel, remove this task, and remove the broadcasting task
+;                                                        
+;                                                        (lamina/force-close udp-client-channel)
+;                                                        (kill-task _ (:name this))
+;                                                        (kill-task _ (:name broadcast-task))))})))                                                 
                                             
                               (= code LOCK-GC)
                               
@@ -941,7 +951,7 @@
           (let [parsed-msg (split data #"\|") data-map (read-string (second parsed-msg))]
             (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
               (lamina/enqueue ch data-map))))
-        (if @alive
+        (if @alive?
           (recur))))
     _)
 
@@ -973,12 +983,15 @@
 
 (defn cyber-physical-unit
   "Creates a new CPU with the given IP!"
-  [ip]
+  [ip udp-port]
   ;Construct a cpu.  Give it a bunch of maps to store stuff in, an IP, a server ip (atomic so that it can change), a variable to determine if the CPU is still
   
-  ;"alive", and an anonymous function containing the garbage collector!
-  
-  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true)) (fn [x] (garbage-collect x)))]
+  ;"alive?", and an anonymous function containing the garbage collector!
+  ;                    [internal-channel-list external-channel-list total-channel-list task-list ip-address server-ip udp-socket-channel alive?]
+  (let [new-udp-socket-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port udp-port :frame (gloss/string :utf-8) :broadcast? true}))
+        new-cpu (construct 
+                  (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") new-udp-socket-channel udp-port (atom true)) ; CPU element
+                  (fn [x] (garbage-collect x)))] ; channel garbage collecting function
     (with-meta new-cpu
       {:type ::cyber-physical-unit
       ::source (fn [] @(:task-list new-cpu))})))
@@ -1099,7 +1112,8 @@
   
   ;Make the UDP client and wait for it to be initialized!
   
-  @(lamina/read-channel (instruction unit [START-UDP-CLIENT]))
+  ; Removed - will be embedded into the CPU!
+  ;@(lamina/read-channel (instruction unit [START-UDP-CLIENT]))
   
   (let [
         
