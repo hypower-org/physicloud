@@ -179,7 +179,7 @@
 (defn tcp-server
   [port]
   (let [server (->TCPserver (atom {}) (atom "initializing..."))]
-      
+    (println "starting tcp server on : " port)  
     (reset! (:kill-function server) (aleph/start-tcp-server (fn [channel client-info] (tcp-client-handler server channel client-info))
                                                             {:port port
                                                              :frame (gloss/string :utf-8 :delimiters ["\r\n"])}))
@@ -188,7 +188,7 @@
 (defn tcp-client-connect
   "Attempts to connect to a given host for 'timeout'.  Will return nil if the client cannot connect"
   [host port timeout]
-      
+
     (let [start-time (time-now) found (atom false) ]
     
       (loop []
@@ -209,7 +209,7 @@
       
         ;Return the client or nil if a connection could not be established
         (if (or @found (> (time-passed start-time) timeout))
-          @found
+          (do (println "connected to " host "on " port)@found)
           (recur)))))
 
 (defn tcp-client
@@ -729,7 +729,7 @@
      
      (send-net _ (package "subscribe" (name (:name (meta channel)))))
      
-     @p))
+     @p));;wont return until p is realized
   
  (construct
    [_ gc-fn]
@@ -746,7 +746,7 @@
          
          {:name "channel-gc"
           :function (fn [this] (locking gc-fn (gc-fn _)))
-         :update-time 10000})
+          :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
    ; [INSTRUCTION-CODE ~~~OTHER-DATA~~~~]   
@@ -899,7 +899,7 @@
     
                               (cond
                                 
-                                ; What is this code for? 
+                                ; What is this code for? ;;I think this is for ping-ing
                                 (= code ip-address)
                                 
                                 ;This is a temporary solution to this problem. What problem?
@@ -1071,7 +1071,7 @@
           ;Make the temp. channel!
         
           ch (temporary-channel unit (keyword ch-name))   
-          
+
           ;Get the time now!
         
           start-time (time-now)]
@@ -1135,6 +1135,7 @@
     ;Figure out if a server is already in existence...
     
     (doseq [k neighbor-ips :while (false? @found)]
+      (println (get neighbors k))
       (when (not= (get neighbors k) "NA")
         
         ;Found a server!  Change the unit' IP to match and start a TCP client!
@@ -1143,7 +1144,7 @@
         (reset! found true)
         (println "Server found")
 ;        (write-to-terminal "Server found")
-        (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])))
+        (instruction unit [START-TCP-CLIENT (str (get neighbors k)) 8998])))
       
     ;When a server isn't in existence, the LOWEST ip starts the server!
       

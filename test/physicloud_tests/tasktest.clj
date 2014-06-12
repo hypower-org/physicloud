@@ -13,7 +13,7 @@
 
 (def test-cpu-two (core/cyber-physical-unit "127.0.0.1"))
 
-(core/instruction test-cpu-two [core/START-TCP-CLIENT "127.0.0.1" 8998])
+(core/instruction test-cpu-two [core/START-TCP-CLIENT "127.0.0.1" 60000])
 
 (core/task test-cpu-two
            {:name "test-time-task"

@@ -12,4 +12,4 @@
 	
 	(core/task robot-consumer-cpu {:name "consumer"
 	                               :function (fn [this robot-control-data]
-	                                           (println robot-control-data))}))
+	                                           )}))

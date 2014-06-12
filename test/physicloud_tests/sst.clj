@@ -57,7 +57,7 @@
                     :on-close :exit
                     :content (label :text "use WASD keys to specify direction")
                     :listen [:key-pressed handler]))
-(defn producerfn [] ["linear-velocity:" @real-linear-velocity " Angular-velocity:" @real-angular-velocity])
+(defn producerfn [] {:linear-velocity @real-linear-velocity :angular-velocity @real-angular-velocity})
 
 
 
