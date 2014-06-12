@@ -782,50 +782,38 @@
                              
                              ;START-UDP-CLIENT expects [OP-CODE]
                              
-                             (let [^Channel udp-client-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port 8999 :frame (gloss/string :utf-8) :broadcast true}))
-                                                  
+                             (let [^Channel broadcast-channel (lamina/wait-for-result (aleph-udp/udp-socket {:port 8999 :frame (gloss/string :utf-8) :broadcast? true}))
+                                  
                                    data (atom {})
                                                  
                                    ;The UDP broadcasting follows a certain protocol!  If hello? is sent, the CPUs listening respond with hello! and the server that they are 
                                    
                                    ;connect to's ip!
                                    
-                                   cb (fn udp-client-actions
-                                        [^String message]
-                                        (println message)
-                                        (let [^String code (first (split (:message message) #"\s+")) ^String sender (:host message)]
-                                          (cond
-                                            (= code "hello?") (lamina/enqueue udp-client-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
-                                            (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message message) #"\s+"))))))]
+                                   listener-cb (fn udp-client-actions
+                                                 [udp-packet]
+                                                 (println udp-packet)
+                                                 (let [^String code (first (split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
+                                                   (cond
+                                                     (= code "hello?") (lamina/enqueue broadcast-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
+                                                     (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message udp-packet) #"\s+"))))))]
                                
-                               (lamina/receive-all udp-client-channel cb)       
+                               (lamina/receive-all broadcast-channel listener-cb)       
                                
-                               ;UDP-BROADCAST expects [OP-CODE number-of-times-to-broadcast interval-of-broadcast (ms)]
+                               ;UDP-BROADCAST expects [OP-CODE]
                                               
-                               (let [broadcast-task (task _ {:name "udp-broadcast"
-                                                             :without-locking true                                                             
-                                                             :function (fn 
-                                                                         [this input-channel]
-                                                                                    
-                                                                         (when (= (first input-channel) UDP-BROADCAST)
-                                                                           
-                                                                           (reset! data {})
-                                                                                        
-                                                                           (let [intervals (second input-channel)
-                                                                                              
-                                                                                 interval-time (nth input-channel 2)
-                                                                                 
-                                                                                 ip-addr-str (str (join "." (subvec (split ip-address #"\.") 0 3)) ".")]                                                                                          
-
-                                                                             (loop [i intervals]
-                                                                               (doseq [msg (map (fn [x] {:host x :port 8999 :message "hello?"})
-                                                                                                (reduce #(conj %1 (str ip-addr-str (str %2))) [] (range 1 10)))]
-                                                                                 (lamina/enqueue udp-client-channel msg))
-                                                                               (Thread/sleep interval-time)
+                               (let [broadcast-task (task _ {:name "udp-broadcast"                                                  
+                                                             :without-locking true    
+                                                             :function (fn [this input-channel]         
+                                                                         (when (= (first input-channel) UDP-BROADCAST) 
+                                                                           (reset! data {})                                                                                     
+                                                                             (loop [i 4]
+                                                                               (lamina/enqueue broadcast-channel {:host "10.10.10.255"  :port 8999  :message "hello? " })                                          
+                                                                               (Thread/sleep 250)
                                                                                (if (> i 0)
                                                                                  (recur (dec i))
-                                                                                 (lamina/enqueue (nth input-channel 3) @data))))))
-                                                             :on-established (fn [] (lamina/enqueue (last payload) udp-client-channel))})]
+                                                                                 (lamina/enqueue (second input-channel) @data)))))
+                                                             :on-established (fn [] (lamina/enqueue (last payload) broadcast-channel))})]
                                               
                                  ;Make a task for stopping the udp-clients
                                  
@@ -836,7 +824,7 @@
                                                         
                                                         ;If killed, close the UDP channel, remove this task, and remove the broadcasting task
                                                         
-                                                        (lamina/force-close udp-client-channel)
+                                                        (lamina/force-close broadcast-channel)
                                                         (kill-task _ (:name this))
                                                         (kill-task _ (:name broadcast-task))))})))                                                 
                                             
@@ -1109,7 +1097,7 @@
         
         ;Get my neighbors via UDP broadcast!
         
-        neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST 5 250]))
+        neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST]))
         
         ;Convert the keys in the map to strings!
         
@@ -1120,7 +1108,7 @@
         neighbor-ips (set (keys neighbors))]
     
     ;Figure out if a server is already in existence...
-    
+    (println neighbor-ips)
     (doseq [k neighbor-ips :while (false? @found)]
       (when (not= (get neighbors k) "NA")
         
@@ -1163,6 +1151,5 @@
       
       (if on-disconnect
         (on-disconnect)))))
-
 
 
