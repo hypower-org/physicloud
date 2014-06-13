@@ -793,10 +793,10 @@
                                    listener-cb (fn udp-client-actions
                                                  [udp-packet]
                                                  (println udp-packet)
-                                                 (let [^String code (first (split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
+                                                 (let [^String code (first (clojure.string/split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
                                                    (cond
                                                      (= code "hello?") (lamina/enqueue broadcast-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
-                                                     (= code "hello!") (swap! data assoc (keyword sender) (second (split (:message udp-packet) #"\s+"))))))]
+                                                     (= code "hello!") (swap! data assoc (keyword sender) (second (clojure.string/split (:message udp-packet) #"\s+"))))))]
                                
                                (lamina/receive-all broadcast-channel listener-cb)       
                                
@@ -806,13 +806,14 @@
                                                              :without-locking true    
                                                              :function (fn [this input-channel]         
                                                                          (when (= (first input-channel) UDP-BROADCAST) 
-                                                                           (reset! data {})                                                                                     
+                                                                           (reset! data {})        
+                                                                           (let [broadcast-ip (clojure.string/join "." (conj (subvec (clojure.string/split ip-address #"\.") 0 3) "255"))]
                                                                              (loop [i 4]
-                                                                               (lamina/enqueue broadcast-channel {:host "10.10.10.255"  :port 8999  :message "hello? " })                                          
-                                                                               (Thread/sleep 250)
-                                                                               (if (> i 0)
-                                                                                 (recur (dec i))
-                                                                                 (lamina/enqueue (second input-channel) @data)))))
+                                                                             (lamina/enqueue broadcast-channel {:host broadcast-ip  :port 8999  :message "hello? " })                                          
+                                                                             (Thread/sleep 250)
+                                                                             (if (> i 0)
+                                                                               (recur (dec i))
+                                                                               (lamina/enqueue (second input-channel) @data))))))
                                                              :on-established (fn [] (lamina/enqueue (last payload) broadcast-channel))})]
                                               
                                  ;Make a task for stopping the udp-clients
