@@ -596,7 +596,7 @@
                         (:consumes task-config-map)
                         (keyword (:produces task-config-map)))
           
-                    
+             ;  [input function name ^Channel channel ^String type consumes]     
           (let [t (EventTaskC. (atom {})
                                (fn [x] (time+ ch (task-error-handler TimeTaskE (:this x) ((:function task-config-map) x))))
                                (:name task-config-map)
