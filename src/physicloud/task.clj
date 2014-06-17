@@ -223,7 +223,7 @@
     [this]   
     (lamina/enqueue @output {produces (function {:this this})})
     this)
-  
+  ;(t/add-outbound new-task (get (merge @internal-channel-list @external-channel-list) (:produces new-task)))
   (add-outbound
     [this channel] 
     (if (= produces (:name (meta channel)))
