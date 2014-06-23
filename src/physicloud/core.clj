@@ -350,7 +350,7 @@
 
     and the function parses the keys for you!"
       
-  [unit {:keys [function consumes produces update-time name auto-establish without-locking on-established additional init]}]
+  [unit {:keys [function consumes produces update-time name without-locking on-established additional init]}]
   (let [args# (second function)]
     
     `(task-builder ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
@@ -360,7 +360,6 @@
                          :update-time ~update-time
                          :type (if ~update-time "time" "event")
                          :listen-time 1000
-                         :auto-establish (if (= ~auto-establish false) false true)
                          :on-established ~on-established
                          :without-locking ~without-locking
                          :init ~init})))
