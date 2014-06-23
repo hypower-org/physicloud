@@ -132,15 +132,14 @@
             (lamina/enqueue client-channel (str (nth processed-payload 2)"|"(count @ch)))))
             
       
-        :default
-      
+        :else
         (do
           (when-let [c-list (get @channel-list (keyword code))]
             ;(write-to-terminal code " -> " payload " -> " @(get @channel-list (keyword code)))
             (doseq [i (keys @c-list)]
               (when (= (lamina/enqueue i msg) :lamina/closed!)
                 (swap! c-list dissoc i)
-                (if (empty? c-list)
+                (if (empty? @c-list)
                   (swap! channel-list dissoc (keyword code)))))))))))
 
 (defprotocol ITCPServer
@@ -321,21 +320,6 @@
           nil))
        (println "the "data" data was in the local list!.......return nil!!!!")))))
 
-;SAVING CODE FOR OLD PING-CHANNEL LOGIC:
-
-;        (ping-channel unit (clojure.core/name data) :lock false) ;this will return the number of clients listening to a channel
-;                                                                 ;from server, returns nil if no such channel exists
-;        ;Unlock if you're supposed to!
-;        (do
-;          (if lock
-;            (unlock unit))
-;          (println "the server has this data!")
-;          (let [ch (external-channel unit data)]
-;            (subscribe-and-wait unit ch)
-;            ch))
-
-
-
 (defmacro task
   
       "Do some fancy replacement of arguments!  Actually, it's really not that hard!  The function originally looks something like...
@@ -477,7 +461,7 @@
   (let [ch-list @(:total-channel-list unit)]
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
-        (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel) (= i :awesome-data-map))
+        (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
           (if-not (vec-contains (filter (fn [x] (not (nil? x))) (flatten (map (fn [x] (conj (let [v (:input x)] (if v (keys @v) [])) (let [v (:output x)] (if v @v nil)))) (vals @(:task-list unit)))))
                                 ch)
             (do(println "removing channel " ch)
