@@ -12,11 +12,11 @@
 
 (core/on-pool t/exec (core/into-physicloud test-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
 
-(core/task test-cpu {:name "producer"
-                      :function (fn [this] (producerfn))
-                      :produces "awesome-data-map"
-                      :update-time 2000
-                      })
+;(core/task test-cpu {:name "producer"
+;                      :function (fn [this] (producerfn))
+;                      :produces "awesome-data-map"
+;                      :update-time 2000
+;                      })
 
 (Thread/sleep 3000)
 
