@@ -344,7 +344,7 @@
 
     and the function parses the keys for you!"
       
-  [unit {:keys [function consumes produces update-time name without-locking on-established additional init]}]
+  [unit {:keys [function consumes produces update-time name auto-establish without-locking on-established additional init]}]
   (let [args# (second function)]
     
     `(task-builder ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
@@ -354,6 +354,7 @@
                          :update-time ~update-time
                          :type (if ~update-time "time" "event")
                          :listen-time 1000
+                         :auto-establish (if (= ~auto-establish false) false true)
                          :on-established ~on-established
                          :without-locking ~without-locking
                          :init ~init})))
@@ -383,163 +384,76 @@
              :init {:data-type-1 [0 0 0] :data-type-2 [1 2 3]}
              :listen-time 1000)"
   
-  ; Should consumes be in here?
   [unit {:keys [type update-time name function produces init listen-time without-locking on-established] :as opts
          :or {listen-time 1000}}]
-   ;If there isn't a name, generate a random one!
+  
+   ;will generate random name if not supplied one
   (let [task-options (if name opts (merge opts {:name (str (gensym "task_"))})) 
         task-list (:task-list unit) 
         internal-channel-list (:internal-channel-list unit) 
-        external-channel-list (:external-channel-list unit)
-        consumer-cycle-in-progress? (:consumer-cycle-in-progress? unit)
-        producer-being-created? (:producer-being-created? unit)]  
+        external-channel-list (:external-channel-list unit)]  
   
     (cond
-    
-      ;Check if a task with the given name already exists...
-      (contains? @task-list (:name task-options)) (println "A task with that name already exists!")
-      
-      ;Make sure a type was supplied...
-      (not type) (println "No type supplied (time or event)") 
-      
-      ;Make sure a function was supplied...
-      (not function) (println "No function supplied") ; We should kick this out! Otherwise, it makes a nil task!
-  
-      (= type "time")
-      (do
-      ;If it's a time driven task...
-      (if update-time
 
-        (let [new-task (t/task-factory task-options) 
-              ch (:channel new-task)]
-               
-          
-          ;If there's any, swap initial data in!
-          (if init
-            (swap! (:state new-task) merge init))
-          
-          ;Put the task into the task-list!
-          (swap! task-list assoc (:name task-options) new-task)        
-          
-          ; Establish the task!
-          (let [channel-list (merge @internal-channel-list @external-channel-list)]   
-              (if (:produces new-task)
-                (if (empty? (:consumes new-task))
-                  ;If it doesn't consume but it produces, generate the output channel, make the task publish to it, and schedule its function!
-                  (do 
-                    (loop [] 
-                      (if @consumer-cycle-in-progress? (recur))) ;wait for a consumer's channel checking cyle to be finished before starting a new producer
-                    (reset! producer-being-created? true)
-                    (internal-channel unit (:produces new-task))
-                    (t/add-outbound new-task (get (merge @internal-channel-list @external-channel-list) (:produces new-task)))
-                    (t/schedule-task new-task update-time 0)
-                    (reset! producer-being-created? false))
-                  ;If the task consumes something, do it in the background.  Who wants to wait for that!
-                  (on-pool t/exec
-                           (loop []  
-                             ;If the task supposed to lock...
-                             (if-not without-locking
-                               (wait-for-lock unit)) 
-                             ;For any types the task consumes, try to generate channels for them!
-                             (doseq [i (:consumes new-task)]
-                               (genchan unit i :listen-time listen-time :lock false)) 
-                             ;If all my dependencies are satisfied...
-                             ;;; Change to an if-let?!? Would this work with the recur???
-                             (if 
-                               (let [all-dependencies (doall (map (fn [data-dep] (contains? (merge @internal-channel-list @external-channel-list) data-dep)) 
-                                                                  (:consumes new-task)))]
-                                 (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
-                               ;Set up the publishing and listening for a task!
-                               (do
-                                 (internal-channel unit (:produces new-task))
-                                 (t/add-outbound new-task (get (merge @internal-channel-list @external-channel-list) (:produces new-task)))
-                                 (doseq [c (:consumes new-task)]
-                                   (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
-                                 (t/schedule-task new-task update-time 0)
-                                 ;If the task is supposed to do something when it's established...
-                                 (if on-established
-                                   (on-established))
-                                 ;If the task is supposed to lock...
-                                 (if-not without-locking
-                                   (unlock unit)))
-                                ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
-                               (do
-                                 (if-not without-locking
-                                   (unlock unit))
-                                 (recur)))
-                             )))
-                (if (empty? (:consumes new-task))      
-                  ;If the task doesn't consume or produce, just schedule the "empty task"
-                  (t/schedule-task new-task update-time 0)
-                  ;Otherwise, do the same thing as above for finding dependencies!  However, this time there isn't anything to produce.  So, don't add any
-                  ;channel to which to publish.
-                  (on-pool t/exec    
-                           (loop []
-                             (if-not without-locking
-                               (wait-for-lock unit))
-                               (doseq [i (:consumes new-task)]
-		                               (genchan unit i :listen-time listen-time :lock false))
-                               (if (let [all-dependencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes new-task)))]
-                                     (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
-                                 (do
-                                   (doseq [c (:consumes new-task)]
-                                     (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
-                                   (t/schedule-task new-task update-time 0)
-                                   
-                                   (if on-established
-                                     (on-established))
-                                   
-                                   (if-not without-locking
-                                     
-                                     (unlock unit)))
-                                 (do
-                                   (if-not without-locking
-                                     (unlock unit))
-                                   (recur))))))))
-          new-task)
-        (println "No update time supplied")))
-      
-      (= type "event")
-      
-      (let [new-event-task (t/task-factory task-options) 
-            ch (:channel new-event-task)] 
-        (if init
-          (swap! (:state new-event-task) merge init))
-        
-        (swap! task-list assoc (:name task-options) new-event-task) ;add task to cpu's list
-        
-        ; Establish the task!
-        (on-pool t/exec   
-           (loop []
-             (if @producer-being-created? (recur)))
-           (loop []
-             (reset! consumer-cycle-in-progress? true)
-             (if-not without-locking
-               (wait-for-lock unit))
-               (doseq [i (:consumes new-event-task)]
-                 (genchan unit i :listen-time listen-time :lock false))
-               (if (let [all-dependencies (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes new-event-task))]
-                     (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
-                 (do
-                   (doseq [c (:consumes new-event-task)]     
-                     (t/attach new-event-task (c (merge @internal-channel-list @external-channel-list))))
-                   (when (:produces new-event-task)
-                     (internal-channel unit (:produces new-event-task))
-                     (t/add-outbound new-event-task ((:produces new-event-task) (merge @internal-channel-list @external-channel-list))))
-                    
-                   (if on-established
-                     (on-established))
-                    
-                   (if-not without-locking
-                     (unlock unit)))
-                  
-                 (do
-                  (if-not without-locking
-                     (unlock unit))
-                  (reset! consumer-cycle-in-progress? false)
-                  (Thread/sleep 10) ;wait to give a potential producer a chance to instantiate
-                  (recur)))))
-        new-event-task))))
+      (contains? @task-list (:name task-options)) (println "A task with that name already exists!")
+
+      (not type) (println "No type supplied (time or event)") 
+
+      (not function) (println "No function supplied")
+  
+      :else      
+       (let [new-task (t/task-factory task-options) 
+             ch (:channel new-task)]
+         
+         ;swap initial data in, and put into task list
+         (if init
+           (swap! (:state new-task) merge init))
+         (swap! task-list assoc (:name task-options) new-task)  
+         
+         ;If the task consumes something, do it in the background
+         (if (:consumes new-task)
+          (on-pool t/exec
+                   (loop []  
+                     ;If the task supposed to lock...
+                     (if-not without-locking
+                       (wait-for-lock unit)) 
+                     ;For any types the task consumes, try to generate channels for them!
+                     (doseq [i (:consumes new-task)]
+                       (genchan unit i :listen-time listen-time :lock false)) 
+                     ;if all dependencies are satisfied, attach to channels, else recur
+                     (if 
+                       (let [all-dependencies (doall (map (fn [data-dep] (contains? (merge @internal-channel-list @external-channel-list) data-dep)) 
+                                                          (:consumes new-task)))]
+                         (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
+                       ;Set up the listening for a task!
+                       (do
+                         (doseq [c (:consumes new-task)]
+                           (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
+                         (if (= type "time") ;only time tasks need to be scheduled
+                          (t/schedule-task new-task update-time 0))
+                         ;If the task is supposed to do something when it's established...
+                         (if on-established
+                           (on-established))
+                         ;If the task is supposed to lock...
+                         (if-not without-locking
+                           (unlock unit)))
+                        ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
+                       (do
+                         (if-not without-locking
+                           (unlock unit))
+                         (recur))))))
+         
+         (if (:produces new-task)
+             (do
+               (internal-channel unit (:produces new-task))
+               (t/add-outbound new-task (get (merge @internal-channel-list @external-channel-list) (:produces new-task)))
+               (t/schedule-task new-task update-time 0)))
+         
+         ;If the task doesn't consume or produce, schedule "empty task"
+         (if-not (or (:consumes new-task) (:produces new-task))      
+           (t/schedule-task new-task update-time 0))
+       new-task))))
+
 
 (defn- vec-contains
   "Determines if a vector contains a given item"
