@@ -344,7 +344,7 @@
 
     and the function parses the keys for you!"
       
-  [unit {:keys [function consumes produces update-time name auto-establish without-locking on-established additional init]}]
+  [unit {:keys [function consumes produces update-time name without-locking on-established additional init]}]
   (let [args# (second function)]
     
     `(task-builder ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
@@ -354,7 +354,6 @@
                          :update-time ~update-time
                          :type (if ~update-time "time" "event")
                          :listen-time 1000
-                         :auto-establish (if (= ~auto-establish false) false true)
                          :on-established ~on-established
                          :without-locking ~without-locking
                          :init ~init})))
@@ -384,9 +383,9 @@
              :init {:data-type-1 [0 0 0] :data-type-2 [1 2 3]}
              :listen-time 1000)"
   
-  ; Is auto-establish really needed? Should consumes be in here?
-  [unit {:keys [type update-time name function produces auto-establish init listen-time without-locking on-established] :as opts
-         :or {auto-establish true listen-time 1000}}]
+  ; Should consumes be in here?
+  [unit {:keys [type update-time name function produces init listen-time without-locking on-established] :as opts
+         :or {listen-time 1000}}]
    ;If there isn't a name, generate a random one!
   (let [task-options (if name opts (merge opts {:name (str (gensym "task_"))})) 
         task-list (:task-list unit) 
@@ -422,9 +421,8 @@
           ;Put the task into the task-list!
           (swap! task-list assoc (:name task-options) new-task)        
           
-          ;When the task is supposed to be automatically established...
-          (when auto-establish
-            (let [channel-list (merge @internal-channel-list @external-channel-list)]   
+          ; Establish the task!
+          (let [channel-list (merge @internal-channel-list @external-channel-list)]   
               (if (:produces new-task)
                 (if (empty? (:consumes new-task))
                   ;If it doesn't consume but it produces, generate the output channel, make the task publish to it, and schedule its function!
@@ -446,8 +444,11 @@
                              (doseq [i (:consumes new-task)]
                                (genchan unit i :listen-time listen-time :lock false)) 
                              ;If all my dependencies are satisfied...
-                             (if (let [all-dependencies (doall (map #(contains? (merge @internal-channel-list @external-channel-list) %) (:consumes new-task)))]
-                                   (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
+                             ;;; Change to an if-let?!? Would this work with the recur???
+                             (if 
+                               (let [all-dependencies (doall (map (fn [data-dep] (contains? (merge @internal-channel-list @external-channel-list) data-dep)) 
+                                                                  (:consumes new-task)))]
+                                 (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
                                ;Set up the publishing and listening for a task!
                                (do
                                  (internal-channel unit (:produces new-task))
@@ -465,7 +466,8 @@
                                (do
                                  (if-not without-locking
                                    (unlock unit))
-                                 (recur))))))
+                                 (recur)))
+                             )))
                 (if (empty? (:consumes new-task))      
                   ;If the task doesn't consume or produce, just schedule the "empty task"
                   (t/schedule-task new-task update-time 0)
@@ -493,8 +495,7 @@
                                  (do
                                    (if-not without-locking
                                      (unlock unit))
-                                   (recur)))))))))
-        
+                                   (recur))))))))
           new-task)
         (println "No update time supplied")))
       
@@ -506,11 +507,9 @@
           (swap! (:state new-event-task) merge init))
         
         (swap! task-list assoc (:name task-options) new-event-task) ;add task to cpu's list
-        (if auto-establish        
-                 
-          ;Do the typical shenanigans for finding dependencies!
-          
-          (on-pool t/exec   
+        
+        ; Establish the task!
+        (on-pool t/exec   
            (loop []
              (if @producer-being-created? (recur)))
            (loop []
@@ -539,7 +538,7 @@
                      (unlock unit))
                   (reset! consumer-cycle-in-progress? false)
                   (Thread/sleep 10) ;wait to give a potential producer a chance to instantiate
-                  (recur))))))
+                  (recur)))))
         new-event-task))))
 
 (defn- vec-contains
