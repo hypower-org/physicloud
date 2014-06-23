@@ -14,4 +14,4 @@
 (core/task robot-producer-cpu {:name "producer"
                                :function (fn [this] (sst/producerfn))
                                :produces "robot-control-data"
-                               :update-time 2000})
+                               :update-time 500})

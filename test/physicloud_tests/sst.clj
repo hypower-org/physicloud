@@ -38,7 +38,7 @@
 	    (= dir RIGHT) (inc-angular-velocity-level)
 	    (= dir LEFT ) (dec-angular-velocity-level)
 	    (= dir DOWN ) (dec-linear-velocity-level)
-      :default (println "problem!"))
+      :else (println "problem!"))
    (reset! real-linear-velocity (convert-linear-velocity @linear-velocity-level))
    (reset! real-angular-velocity (convert-angular-velocity @angular-velocity-level)))
       
