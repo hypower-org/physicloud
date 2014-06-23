@@ -4,11 +4,11 @@
             [gloss.core :as gloss]
             [aleph.tcp :as aleph]
             [physicloud.task :as t]
+            [physicloud.utilities :as util]
             [clojure.core.async.impl.concurrent :as conc]
             [clojure.core.async.impl.exec.threadpool :as tp]
             [clojure.core.async :as async])
-  (:use [clojure.string :only (join split)]
-        [physicloud.utilities])
+  (:use [clojure.string :only (join split)])
   (:import [lamina.core.channel Channel]
            [clojure.core.async.impl.channels ManyToManyChannel]
            [java.util.concurrent TimeUnit]
@@ -121,7 +121,7 @@
       
         (= code "ping-channel")
                         ;code                ;payload
-        ;unit (package "ping-channel" [(:ip-address unit) channel-name ch-name]))
+        ;unit (util/package "ping-channel" [(:ip-address unit) channel-name ch-name]))
        
         ;Check how many people are listening to a channel!
         (let [processed-payload (read-string (first payload))     
@@ -176,7 +176,7 @@
   "Attempts to connect to a given host for 'timeout'.  Will return nil if the client cannot connect"
   [host port timeout]
       
-    (let [start-time (time-now) found (atom false) ]
+    (let [start-time (util/time-now) found (atom false) ]
     
       (loop []
           ;Continue trying to connect in case the server hasn't started yet...
@@ -191,7 +191,7 @@
                       (reset! found nil))))
           (Thread/sleep 100)
         ;Return the client or nil if a connection could not be established
-        (if (or @found (> (time-passed start-time) timeout))
+        (if (or @found (> (util/time-passed start-time) timeout))
           @found
           (recur)))))
 
@@ -224,7 +224,7 @@
         (lamina/siphon (:network-out-channel @(:total-channel-list unit)) client)
     
         ;Take all of the data from the client and 'put' it into a core.async channel!
-        (lamina/receive-all client (fn [msg] (lamina-to-async (:network-in-channel @(:total-channel-list unit)) msg)))
+        (lamina/receive-all client (fn [msg] (util/lamina-to-async (:network-in-channel @(:total-channel-list unit)) msg)))
 
         client))))
 
@@ -284,7 +284,7 @@
                      ;Receive all the data from the temp. channel, subscribe to the network channel, and then request information of the given type.                                            
                      (subscribe-and-wait unit ch) 
                      (lamina/receive-all ch cb)
-                     (send-net unit (package "kernel" [REQUEST-INFORMATION-TYPE ch-name data]))
+                     (send-net unit (util/package "kernel" [REQUEST-INFORMATION-TYPE ch-name data]))
     
                      ;Take a nap while the 'cb' collects 'data'!
                      (Thread/sleep listen-time)
@@ -311,7 +311,7 @@
           (if lock 
             (unlock unit))                           
           ;Tell the chosen CPU to publish data!
-          (send-net unit (package "kernel" [chosen ch-name (:ip-address unit)]))
+          (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
           ch)
         (do
           ;Unlock if you're supposed to!
@@ -555,7 +555,7 @@
      (swap! internal-channel-list dissoc ch-name)
      (swap! external-channel-list dissoc ch-name)
      (swap! total-channel-list dissoc ch-name)
-     (send-net _ (package "unsubscribe" (name ch-name)))
+     (send-net _ (util/package "unsubscribe" (name ch-name)))
      _))
   
  ICPUUtil
@@ -583,7 +583,7 @@
          cb (fn [x] (deliver p true))]
      (lamina/receive channel cb)
      
-     (send-net _ (package "subscribe" (name (:name (meta channel)))))
+     (send-net _ (util/package "subscribe" (name (:name (meta channel)))))
      
      @p))
   
@@ -755,13 +755,13 @@
                                                   :consumes #{(keyword (first payload))}
                                                   :function (fn [map] 
                                                               (if (ping-channel _ (first payload))
-                                                                (send-net _ (package (first payload) (dissoc map :this))) 
+                                                                (send-net _ (util/package (first payload) (dissoc map :this))) 
                                                                 (do (println "DIE") (kill-task _ (:name (:this map))))))}))
       
                                 (= code REQUEST-REPEATER)
                                 
                                 ;Requests a repeater.  This portion really hasn't been tested that much.  However, it shouldn't really be needed
-                                (send-net _ (package (first payload) {:ip ip-address}))
+                                (send-net _ (util/package (first payload) {:ip ip-address}))
         
         
                                 ;(= code REQUEST-BENCHMARK)
@@ -771,16 +771,16 @@
         
 ;                                (do
 ;                                  (println (second payload))
-;                                  (send-net _ (package (first payload) {ip-address (c/benchmark-task (second payload))})))
+;                                  (send-net _ (util/package (first payload) {ip-address (c/benchmark-task (second payload))})))
         
                                 (= code REQUEST-INFORMATION-TYPE)
                                 
                                 ;Requests data!  If the CPU has the data, it will respond with its 'ip-address'!
-                                ; unit (package "kernel" [REQUEST-INFORMATION-TYPE ch-name data])
+                                ; unit (util/package "kernel" [REQUEST-INFORMATION-TYPE ch-name data])
                                (do
                                 (println "I am recieving a request for the following data: " (second payload))
                                 (when ((second payload) @total-channel-list)
-                                  (send-net _ (package (first payload) [ip-address]))))
+                                  (send-net _ (util/package (first payload) [ip-address]))))
                                 
                                 ;The CPU is being pinged!  Respond with the time it got the ping...
                                 
@@ -788,7 +788,7 @@
                 
                                 (= code PING)
         
-                                (send-net _ (package (first payload) (time-now))))))))
+                                (send-net _ (util/package (first payload) (util/time-now))))))))
 
     ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
@@ -872,7 +872,7 @@
           
           ;Get the time right now!
         
-          start-time (time-now)]
+          start-time (util/time-now)]
     
       ;Subscribe to a channel and wait for it to be initialized!  This action is important because there will only be ONE message over this channel
       
@@ -880,7 +880,7 @@
       
       ;Ping the CPU!
  
-      (send-net unit (package "ping" [ip] [PING ch-name]))
+      (send-net unit (util/package "ping" [ip] [PING ch-name]))
       
       ;Wait for the message for the specified length of time...
     
@@ -896,7 +896,7 @@
         ;If a result was actually obtained, return the time passed.  Otherwise, return the result (which is nil)
         
         (if result 
-         (time-passed start-time) 
+         (util/time-passed start-time) 
           result))))
 
 (defn ping-channel 
@@ -920,7 +920,7 @@
           
           ;Get the time now!
         
-          start-time (time-now)]
+          start-time (util/time-now)]
       
       ;Subscribe and wait for the channel to be initialized on the network because we're only getting ONE message
     
@@ -928,7 +928,7 @@
       
       ;Ping the channel!
       
-      (send-net unit (package "ping-channel" [(:ip-address unit) channel-name ch-name]))
+      (send-net unit (util/package "ping-channel" [(:ip-address unit) channel-name ch-name]))
       
       ;Wait for our response...
     
