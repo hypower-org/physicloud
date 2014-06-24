@@ -261,7 +261,7 @@
          (unlock unit))
        (println "the server has this data!")
        (let [ch (external-channel unit data)]
-         (subscribe-and-wait unit ch)
+         (subscribe-and-wait unit ch :timeout 1500)
          ch))
 
     :else  ;see if data is over network, make fresh channel
@@ -281,7 +281,7 @@
                      (println "going over network to find channel: " data))
                          
                      ;Receive all the data from the temp. channel, subscribe to the network channel, and then request information of the given type.                                            
-                     (subscribe-and-wait unit ch) 
+                     (subscribe-and-wait unit ch :timeout 1500) 
                      (lamina/receive-all ch cb)
                      (send-net unit (util/package "kernel" [REQUEST-INFORMATION-TYPE ch-name data]))
     
@@ -304,7 +304,7 @@
               ;Make a networked channel for the data!
               ch (let [ch (external-channel unit data)]
                    (println "making networked channel for data: " data)
-                   (subscribe-and-wait unit ch) 
+                   (subscribe-and-wait unit ch :timeout 1500) 
                    ch)]                       
           ;Unlock if you're supposed to!
           (if lock 
@@ -487,7 +487,7 @@
   
   (send-net [_ message] "Sends a message over the network from a given CPU.")
   
-  (subscribe-and-wait [_ channel] "Subscribes to the channel and waits for the subscription to be initialized.  Channel must be a lamina channel!")
+  (subscribe-and-wait [_ channel & {:keys [timeout] :or { timeout 1500}}] "Subscribes to the channel and waits for the subscription to be initialized.  Channel must be a lamina channel!")
   
   (construct [_ gc-fn] "Initializes the Cyber-Physical Unit"))
 
@@ -560,15 +560,24 @@
    (lamina/enqueue (:network-out-channel @total-channel-list) message))
  
  (subscribe-and-wait
-   [_ channel]
+   [_ channel & {:keys [timeout] :or {timeout 1500}}]
    ;Subscribe to a channel, but wait until the server has completed initializing it
-   (let [p (promise)    
-         cb (fn [x] (deliver p true))]
-     (lamina/receive channel cb)
+   (let [p (atom false)    
+         cb (fn [x] (reset! p true))
+         timeout? (atom false)]
      
+     (lamina/receive channel cb)
      (send-net _ (util/package "subscribe" (name (:name (meta channel)))))
      
-     @p))
+     ;loop to ensure the subscribe and wait does not take longer than the timeout period
+     (loop [start-time (util/time-now)]
+      (if (> (util/time-passed start-time) timeout)
+        (reset! timeout? true))
+      (if (and (false? @timeout?) (false? @p))
+        (recur start-time)
+        (if @timeout? 
+          nil
+          true)))))
   
  (construct
    [_ gc-fn]
@@ -773,7 +782,7 @@
         
                                 (send-net _ (util/package (first payload) (util/time-now))))))))
 
-    ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
+    ;A go block used for effi otherciency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
     
     (async/go
@@ -859,28 +868,26 @@
     
       ;Subscribe to a channel and wait for it to be initialized!  This action is important because there will only be ONE message over this channel
       
-      (subscribe-and-wait unit ch)
-      
+      (if (= nil (subscribe-and-wait unit ch :timeout 1500))
+        nil
+        ;else
+        (do
       ;Ping the CPU!
- 
-      (send-net unit (util/package "ping" [ip] [PING ch-name]))
-      
+         (send-net unit (util/package "ping" [ip] [PING ch-name]))
       ;Wait for the message for the specified length of time...
-    
-      (let [result (deref (lamina/read-channel ch) timeout nil)]    
-      
-        (remove-channel unit ch)
+         (let [result (deref (lamina/read-channel ch) timeout nil)]    
+           (remove-channel unit ch)
         
-        ;If supposed to lock...
+           ;If supposed to lock...
         
-        (if lock
-          (unlock unit))
+           (if lock
+             (unlock unit))
              
-        ;If a result was actually obtained, return the time passed.  Otherwise, return the result (which is nil)
+           ;If a result was actually obtained, return the time passed.  Otherwise, return the result (which is nil)
         
-        (if result 
-         (util/time-passed start-time) 
-          result))))
+             (if result 
+              (util/time-passed start-time) 
+               result))))))
 
 (defn ping-channel 
   [unit channel-name & {:keys [timeout lock] :or {timeout 1000 lock true}}]
@@ -907,7 +914,7 @@
       
       ;Subscribe and wait for the channel to be initialized on the network because we're only getting ONE message
     
-      (subscribe-and-wait unit ch)
+      (subscribe-and-wait unit ch :timeout 1500)
       
       ;Ping the channel!
       
@@ -1001,9 +1008,9 @@
       (recur)
       
       ;If there is supposed to be a function run on disconnect, run it!
-      
-      (if on-disconnect
-        (on-disconnect)))))
+      (do (println "connection to server lost")
+       (if on-disconnect
+         (on-disconnect))))))
 
 
 
