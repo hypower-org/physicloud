@@ -1012,7 +1012,7 @@
         (do
           ;hang on the server initialization
           (loop []
-            (if (:wait-for-server unit) 
+            (if @(:wait-for-server? unit) 
               (recur)))
 ;         (change-server-ip unit (first neighbor-ips))
           (println "Connecting to: " @(:server-ip unit))
@@ -1028,8 +1028,8 @@
      ;If there is supposed to be a function run on disconnect, run it!
      (do (println "connection to server lost")
        @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
-       (reset! (:server-ip unit) (atom "NA"))
-       (reset! (:wait-for-server? unit) (atom true))
+       (reset! (:server-ip unit) "NA")
+       (reset! (:wait-for-server? unit) true)
        (into-physicloud unit :initial-establish? false)))))
 
 
