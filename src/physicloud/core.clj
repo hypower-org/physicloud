@@ -658,7 +658,7 @@
                                                  (println udp-packet)
                                                  (let [^String code (first (clojure.string/split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
                                                    (cond
-                                                     (= code "Server-up!")(reset! wait-for-server? false)
+                                                     (= code "Server-up!")(do (reset! server-ip sender) (reset! wait-for-server? false))
                                                      (= code "hello?") (lamina/enqueue broadcast-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
                                                      (= code "hello!") (swap! data assoc (keyword sender) (second (clojure.string/split (:message udp-packet) #"\s+"))))))]
                                
