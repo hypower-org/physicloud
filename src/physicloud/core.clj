@@ -204,8 +204,7 @@
   
     (when-let [
                client-channel 
-               (tcp-client-connect host port timeout-portion)]
-    
+               (tcp-client-connect host port 6000)]
       (when-let [            
                  client
                  
@@ -216,7 +215,7 @@
                     (fn [channel] (lamina/enqueue channel "subscribe|kernel") channel)
                     (fn [channel] (try (lamina/wait-for-message channel timeout-portion) (catch Exception e nil)))
                     (fn [result] (if (= result "kernel|connected") client-channel nil)))]
-    
+
         (if on-closed
           (lamina/on-closed client on-closed)) 
     
@@ -1003,6 +1002,7 @@
         (do
           (change-server-ip unit (first neighbor-ips))
           (println "Connecting to: " @(:server-ip unit))
+          (Thread/sleep 2000)
           (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])))))
   
   ;Check @ 'heartbeat' if the connection to the server is still alive
@@ -1016,7 +1016,7 @@
      (do (println "connection to server lost")
        @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
        (println "returned ffrom stop-tcp-client instruction")
-       (reset! (:server-ip unit)            (atom "NA"))
+       (reset! (:server-ip unit) (atom "NA"))
        (into-physicloud unit :initial-establish? false)))))
 
 
