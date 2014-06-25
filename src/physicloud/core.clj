@@ -46,6 +46,7 @@
 (def START-UDP-CLIENT 6)
 (def STOP-UDP-CLIENT 7)
 (def UDP-BROADCAST 8)
+(def DECLARE-SERVER-UP 9)
 
 ;Declares for some cyclic code.  Don't worry about these too much
 
@@ -495,7 +496,7 @@
   
   (kill-task [_ task] "Removes a given task from memory and stops all of its functionality."))
 
-(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive ]
+(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive wait-for-server? ]
 
  ICPUChannel
   
@@ -612,6 +613,7 @@
                              (= code START-SERVER)
                                             
                              (let [server (tcp-server (first payload))]
+                               (instruction _ [DECLARE-SERVER-UP])
                                (task _ {:name "stop-server-task"
                                         :without-locking true
                                         :function (fn [this input-channel]
@@ -656,6 +658,7 @@
                                                  (println udp-packet)
                                                  (let [^String code (first (clojure.string/split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
                                                    (cond
+                                                     (= code "Server-up!")(reset! wait-for-server? false)
                                                      (= code "hello?") (lamina/enqueue broadcast-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
                                                      (= code "hello!") (swap! data assoc (keyword sender) (second (clojure.string/split (:message udp-packet) #"\s+"))))))]
                                
@@ -674,7 +677,11 @@
                                                                              (Thread/sleep 250)
                                                                              (if (> i 0)
                                                                                (recur (dec i))
-                                                                               (lamina/enqueue (second input-channel) @data))))))
+                                                                               (do (Thread/sleep 500) ; allow all messages to be recieved before returning information
+                                                                                 (lamina/enqueue (second input-channel) @data))))))
+                                                                         (when (= (first input-channel) DECLARE-SERVER-UP)
+                                                                           (let [broadcast-ip (clojure.string/join "." (conj (subvec (clojure.string/split ip-address #"\.") 0 3) "255"))]
+                                                                           (lamina/enqueue broadcast-channel {:host broadcast-ip  :port 8999  :message "Server-up! " }))))
                                                              :on-established (fn [] (lamina/enqueue (last payload) broadcast-channel))})]
                                               
                                  ;Make a task for stopping the udp-clients
@@ -830,7 +837,7 @@
   
   ;"alive", and an anonymous function containing the garbage collector!
   
-  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true)) (fn [x] (garbage-collect x)))]
+  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true) (atom true)) (fn [x] (garbage-collect x)))]
     (with-meta new-cpu
       {:type ::cyber-physical-unit
       ::source (fn [] @(:task-list new-cpu))})))
@@ -950,7 +957,7 @@
   [unit  & {:keys [heartbeat on-disconnect initial-establish?] :or {heartbeat 1000 on-disconnect nil initial-establish? true}}]
   (reset! (:server-ip unit) "NA")
   ;Make the UDP client and wait for it to be initialized!
-  (when initial-establish?
+  (if initial-establish?
   @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
   
   (let [
@@ -970,7 +977,7 @@
         ;Get the ip's of the neighbors and put them into a set!
         
         neighbor-ips (set (keys neighbors))]
-    
+
     ;Figure out if a server is already in existence...
     (println neighbor-ips)
     (doseq [k neighbor-ips :while (false? @found)]
@@ -981,28 +988,34 @@
         (change-server-ip unit (get neighbors k))
         (reset! found true)
         (println "Server found")
-;        (write-to-terminal "Server found")
         (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])))
       
     ;When a server isn't in existence, the LOWEST ip starts the server!
-      
+
+    ;;insert algorithm here to determine sever
+    
+
+    
     (when (not @found)
-      (if (= (first neighbor-ips) (:ip-address unit))
-          
+      (if (= (first neighbor-ips) (:ip-address unit))  
         ;The case where this unit is the lowest IP
-          
         (do 
           (println "No server found. Establishing server...")
           (instruction unit [START-SERVER 8998])
-          (change-server-ip unit (:ip-address unit))
+;          (change-server-ip unit (:ip-address unit))
           (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998]))      
           
         ;The case where this unit is NOT the lowest ip
-          
+        
+
+
         (do
-          (change-server-ip unit (first neighbor-ips))
+          ;hang on the server initialization
+          (loop []
+            (if (:wait-for-server unit) 
+              (recur)))
+;         (change-server-ip unit (first neighbor-ips))
           (println "Connecting to: " @(:server-ip unit))
-          (Thread/sleep 2000)
           (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])))))
   
   ;Check @ 'heartbeat' if the connection to the server is still alive
@@ -1015,8 +1028,8 @@
      ;If there is supposed to be a function run on disconnect, run it!
      (do (println "connection to server lost")
        @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
-       (println "returned ffrom stop-tcp-client instruction")
        (reset! (:server-ip unit) (atom "NA"))
+       (reset! (:wait-for-server? unit) (atom true))
        (into-physicloud unit :initial-establish? false)))))
 
 
