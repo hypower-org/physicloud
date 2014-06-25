@@ -59,6 +59,7 @@
 (declare wait-for-lock)
 (declare unlock)
 (declare subscribe-and-wait)
+(declare into-physicloud)
 
 (defmacro on-pool
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
@@ -495,7 +496,7 @@
   
   (kill-task [_ task] "Removes a given task from memory and stops all of its functionality."))
 
-(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive]
+(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive ]
 
  ICPUChannel
   
@@ -607,7 +608,7 @@
                                           
                            (cond
                              
-                             ;START-SERVE expects [OP-CODE port]
+                             ;START-SERVER expects [OP-CODE port]
                             
                              (= code START-SERVER)
                                             
@@ -617,15 +618,16 @@
                                         :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
                                                       (kill-task _ (:name this))
-                                                      (kill server)))})
+                                                      (kill server)
+                                                      (println "just killed server, encuing true")
+                                                      (lamina/enqueue (second input-channel) true)))})
                                
-                               (lamina/enqueue (last payload) server)) ;
+                               (lamina/enqueue (last payload) server))
                                             
                                             
                              (= code START-TCP-CLIENT)
                              
                              ;START-TCP-CLIENT expects [OP-CODE host-ip port]
-                                            
                              (let [client (tcp-client _ (first payload) (second payload))]
                             
                                (task _ {:name "stop-client-task"
@@ -633,8 +635,9 @@
                                         :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-TCP-CLIENT)
                                                       (kill-task _ (:name this))
-                                                      (lamina/force-close client)))})
-                               
+                                                      (lamina/force-close client)
+                                                      (println "just force closed the client, encuing true")
+                                                      (lamina/enqueue (second input-channel) true)))})
                                (lamina/enqueue (last payload) client))
                                             
                              (= code START-UDP-CLIENT)
@@ -848,10 +851,9 @@
   [unit ip & {:keys [timeout lock] :or {timeout 1000 lock true}}]
   
   ;If supposed to wait for a lock...
-  
-  (if lock
-    (wait-for-lock unit))
-  
+;  (if lock
+;    (wait-for-lock unit))
+
     (let [
 
           ;Make a channel over which the ping data will be recieved!
@@ -867,15 +869,17 @@
           start-time (util/time-now)]
     
       ;Subscribe to a channel and wait for it to be initialized!  This action is important because there will only be ONE message over this channel
-      
+
       (if (= nil (subscribe-and-wait unit ch :timeout 1500))
         nil
         ;else
         (do
       ;Ping the CPU!
+
          (send-net unit (util/package "ping" [ip] [PING ch-name]))
       ;Wait for the message for the specified length of time...
-         (let [result (deref (lamina/read-channel ch) timeout nil)]    
+         (let [result (deref (lamina/read-channel ch) timeout nil)]   
+
            (remove-channel unit ch)
         
            ;If supposed to lock...
@@ -886,7 +890,7 @@
            ;If a result was actually obtained, return the time passed.  Otherwise, return the result (which is nil)
         
              (if result 
-              (util/time-passed start-time) 
+              (util/time-passed start-time)
                result))))))
 
 (defn ping-channel 
@@ -935,6 +939,7 @@
         
         result)))
 
+
 (defn into-physicloud
   
   "Initializes a cpu into physicloud!  If a physicloud instance is not available, it will start one itself.
@@ -943,11 +948,11 @@
    @heartbeat the interval at which the CPU will check if it's still connected.  Default 1000
    @on-disconnect the function to be run if/when the CPU is disconnected. Default nil"
   
-  [unit & {:keys [heartbeat on-disconnect] :or {heartbeat 1000 on-disconnect nil}}]
-  
+  [unit  & {:keys [heartbeat on-disconnect initial-establish?] :or {heartbeat 1000 on-disconnect nil initial-establish? true}}]
+  (reset! (:server-ip unit) "NA")
   ;Make the UDP client and wait for it to be initialized!
-  
-  @(lamina/read-channel (instruction unit [START-UDP-CLIENT]))
+  (when initial-establish?
+  @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
   
   (let [
         
@@ -1002,15 +1007,17 @@
   
   ;Check @ 'heartbeat' if the connection to the server is still alive
   
-  (loop []
-    (Thread/sleep heartbeat)
-    (if (ping-cpu unit (:ip-address unit))
-      (recur)
+(loop []
+  (Thread/sleep heartbeat)
+   (if (ping-cpu unit (:ip-address unit))
+     (recur)
       
-      ;If there is supposed to be a function run on disconnect, run it!
-      (do (println "connection to server lost")
-       (if on-disconnect
-         (on-disconnect))))))
+     ;If there is supposed to be a function run on disconnect, run it!
+     (do (println "connection to server lost")
+       @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
+       (println "returned ffrom stop-tcp-client instruction")
+       (reset! (:server-ip unit)            (atom "NA"))
+       (into-physicloud unit :initial-establish? false)))))
 
 
 
