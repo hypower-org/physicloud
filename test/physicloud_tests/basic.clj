@@ -13,18 +13,6 @@
 (core/on-pool t/exec (core/into-physicloud test-cpu))
 
 
-  
-;(loop []
-;  (Thread/sleep heartbeat)
-;  (if (ping-cpu unit (:ip-address unit))
-;    (recur)
-;      
-;    ;If there is supposed to be a function run on disconnect, run it!
-;    (do (println "connection to server lost")
-;      @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
-;      @(lamina/read-channel (instruction unit [STOP-SERVER]))
-;     (into-physicloud unit)))))
-
 (core/task test-cpu {:name "producer"
                       :function (fn [this] (producerfn))
                       :produces "awesome-data-map"

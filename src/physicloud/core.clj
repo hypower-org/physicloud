@@ -954,7 +954,11 @@
    @heartbeat the interval at which the CPU will check if it's still connected.  Default 1000
    @on-disconnect the function to be run if/when the CPU is disconnected. Default nil"
   
-  [unit  & {:keys [heartbeat on-disconnect initial-establish?] :or {heartbeat 1000 on-disconnect nil initial-establish? true}}]
+  [unit  & {:keys [on-disconnect initial-establish?] :or {on-disconnect nil initial-establish? true}}]
+ 
+ 
+ 
+ 
   (reset! (:server-ip unit) "NA")
   ;Make the UDP client and wait for it to be initialized!
   (if initial-establish?
@@ -1027,6 +1031,9 @@
       
      ;If there is supposed to be a function run on disconnect, run it!
      (do (println "connection to server lost")
+       (reset! (:server-ip unit) "NA")
+       (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and 
+                           ;;if the server is actually down, they will also discovering
        @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
        (reset! (:server-ip unit) "NA")
        (reset! (:wait-for-server? unit) true)
