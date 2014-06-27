@@ -945,15 +945,23 @@
         ;Return the result!
         
         result)))
+
+;;this function determines which tasks need to look for dependencies again on server reboot
+;; and rebuilds the channels
 (defn rebuild-network-tasks [unit]
   (let [rebuild-tasks (atom [])]
-    (doseq [i @(:task-list unit)]
-      (doseq [k (:consumes i)]
-        (if (contains? (:external-channel-list unit) k)
-          (println "checking to see if the channel list: "(:external-channel-list unit) "has: " k)
-          (swap! rebuild-tasks conj i))))
-    
-    (println @rebuild-tasks)))
+    (doseq [i  @(:task-list unit)]
+      (doseq [k (:consumes (second i))]
+        (if (= (first (keys @(:external-channel-list unit))) k)
+          (do(println (k @(:external-channel-list unit)))
+          (remove-channel unit (k @(:external-channel-list unit)))
+          (on-pool t/exec 
+                   (loop []
+                     (let [new-ch (genchan unit k)]
+                       (if new-ch
+                         (t/attach (second i) new-ch)
+                         (recur)))))))))))
+
                        
 
 (defn into-physicloud
@@ -965,10 +973,7 @@
    @on-disconnect the function to be run if/when the CPU is disconnected. Default nil"
   
   [unit  & {:keys [on-disconnect] :or {on-disconnect nil}}]
- 
- 
- 
- 
+
   (loop [initial-establish? true]
     
   ;Make the UDP client and wait for it to be initialized!
