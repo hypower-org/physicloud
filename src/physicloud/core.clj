@@ -465,7 +465,8 @@
         (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
           (if-not (vec-contains (filter (fn [x] (not (nil? x))) (flatten (map (fn [x] (conj (let [v (:input x)] (if v (keys @v) [])) (let [v (:output x)] (if v @v nil)))) (vals @(:task-list unit)))))
                                 ch)
-            (do(println "removing channel " ch)
+            (do
+              (println "removing channel " i)
             (remove-channel unit ch))))))))
   
 
@@ -557,7 +558,6 @@
  (send-net
    [_ message]
    ;Enqueue a message into the network-out-channel!
-
    (lamina/enqueue (:network-out-channel @total-channel-list) message))
  
  (subscribe-and-wait
@@ -566,7 +566,6 @@
    (let [p (atom false)    
          cb (fn [x] (reset! p true))
          timeout? (atom false)]
-     
      (lamina/receive channel cb)
      (send-net _ (util/package "subscribe" (name (:name (meta channel)))))
      
@@ -590,11 +589,10 @@
     
    ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.
     
-   (task _ 
-         
+   (task _   
          {:name "channel-gc"
           :function (fn [this] (locking gc-fn (gc-fn _)))
-         :update-time 10000})
+          :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
    ; [INSTRUCTION-CODE ~~~OTHER-DATA~~~~]   
@@ -620,7 +618,7 @@
                                                     (when (= (first input-channel) STOP-SERVER)
                                                       (kill-task _ (:name this))
                                                       (kill server)
-                                                      (println "just killed server, encuing true")
+                                                      (println "just killed server")
                                                       (lamina/enqueue (second input-channel) true)))})
                                
                                (lamina/enqueue (last payload) server))
@@ -637,7 +635,7 @@
                                                     (when (= (first input-channel) STOP-TCP-CLIENT)
                                                       (kill-task _ (:name this))
                                                       (lamina/force-close client)
-                                                      (println "just force closed the client, encuing true")
+                                                      (println "just force closed the client")
                                                       (lamina/enqueue (second input-channel) true)))})
                                (lamina/enqueue (last payload) client))
                                             
@@ -733,7 +731,7 @@
         
     (lamina/receive-all (internal-channel _ :kernel)  
                         
-                        ;This callback contains all of the kernel functionality!
+                        ;This callback contains all of the kernel functionality
                         
                         (fn 
                           [data]
@@ -857,11 +855,11 @@
   [unit ip & {:keys [timeout lock] :or {timeout 1000 lock true}}]
   
   ;If supposed to wait for a lock...
-;  (if lock
-;    (wait-for-lock unit))
+  (if lock
+    (wait-for-lock unit))
+
 
     (let [
-
           ;Make a channel over which the ping data will be recieved!
         
           ch-name (str (gensym (str "p_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))
@@ -877,7 +875,10 @@
       ;Subscribe to a channel and wait for it to be initialized!  This action is important because there will only be ONE message over this channel
 
       (if (= nil (subscribe-and-wait unit ch :timeout 1500))
-        nil
+        (do
+          (if lock
+             (unlock unit))
+          nil)
         ;else
         (do
       ;Ping the CPU!
@@ -944,7 +945,16 @@
         ;Return the result!
         
         result)))
-
+(defn rebuild-network-tasks [unit]
+  (let [rebuild-tasks (atom [])]
+    (doseq [i @(:task-list unit)]
+      (doseq [k (:consumes i)]
+        (if (contains? (:external-channel-list unit) k)
+          (println "checking to see if the channel list: "(:external-channel-list unit) "has: " k)
+          (swap! rebuild-tasks conj i))))
+    
+    (println @rebuild-tasks)))
+                       
 
 (defn into-physicloud
   
@@ -966,7 +976,6 @@
     @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
   
     (let [
-        
           ;Make an atom for convenience
         
           found (atom false) 
@@ -993,7 +1002,9 @@
           (change-server-ip unit (get neighbors k))
           (reset! found true)
           (println "Server found")
-          (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])))
+          (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])
+          (if-not initial-establish?
+            (rebuild-network-tasks unit))))
       
       ;When a server isn't in existence, the LOWEST ip starts the server!
 
@@ -1007,21 +1018,20 @@
           (do 
             (println "No server found. Establishing server...")
             (instruction unit [START-SERVER 8998])
-;          (change-server-ip unit (:ip-address unit))
-          (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998]))      
+            (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
+            (if-not initial-establish?
+              (rebuild-network-tasks unit)))      
           
         ;The case where this unit is NOT the lowest ip
-        
-
-
         (do
           ;hang on the server initialization
           (loop []
             (if @(:wait-for-server? unit) 
               (recur)))
-;         (change-server-ip unit (first neighbor-ips))
           (println "Connecting to: " @(:server-ip unit))
-          (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])))))
+          (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])
+          (if-not initial-establish?
+            (rebuild-network-tasks unit))))))
   
   ;Check @ 'heartbeat' if the connection to the server is still alive
   
@@ -1036,7 +1046,6 @@
           (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and 
                               ;;if the server is actually down, they will also discovering
           @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
-          (reset! (:server-ip unit) "NA")
           (reset! (:wait-for-server? unit) true))))
   (recur false)))
 
