@@ -96,6 +96,7 @@
   
   (handler
     [this msg]
+    
     (let [
         
         parsed-msg (clojure.string/split msg #"\|")
@@ -116,10 +117,11 @@
       
         (= code "ping")
         
+        (do (println "Server telling the client" client-ip "client they are recieving a ping")
         ;Tell a SINGLE client that they are receiving a ping!
       
         (if (> (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))) 0)
-          (lamina/enqueue client-channel (str "kernel|"(second payload))))
+          (lamina/enqueue client-channel (str "kernel|"(second payload)))))
       
         (= code "ping-channel")
                         ;code                ;payload
@@ -203,10 +205,10 @@
   
   (let [timeout-portion (/ timeout 2)]
   
-    (when-let [
-               client-channel 
-               (tcp-client-connect host port 6000)]
-      (when-let [            
+    (when-let [client-channel (tcp-client-connect host port 6000)]
+      
+      (when-let [
+
                  client
                  
                  ;Run a handshake with the server to ensure that the kernel channel is properly established. 
@@ -742,20 +744,20 @@
     
                               (cond
                                 
-                                ; What is this code for? 
-                                (= code ip-address)
-                                
-                                ;This is a temporary solution to this problem. What problem?
-                                (do
-                                  ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
-                                  
-                                  (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
-                                                  :type "event"
-                                                  :consumes #{(keyword (first payload))}
-                                                  :function (fn [map] 
-                                                              (if (ping-channel _ (first payload))
-                                                                (send-net _ (util/package (first payload) (dissoc map :this))) 
-                                                                (do (println "DIE") (kill-task _ (:name (:this map))))))}))
+;                                ; What is this code for? 
+;                                (= code ip-address)
+;                                
+;                                ;This is a temporary solution to this problem. What problem?
+;                                (do
+;                                  ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
+;                                  
+;                                  (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
+;                                                  :type "event"
+;                                                  :consumes #{(keyword (first payload))}
+;                                                  :function (fn [map] 
+;                                                              (if (ping-channel _ (first payload))
+;                                                                (send-net _ (util/package (first payload) (dissoc map :this))) 
+;                                                                (do (println "DIE") (kill-task _ (:name (:this map))))))}))
       
                                 (= code REQUEST-REPEATER)
                                 
@@ -786,16 +788,17 @@
                                 ;PING expects [OP-CODE name-of-network-channel]
                 
                                 (= code PING)
-        
-                                (send-net _ (util/package (first payload) (util/time-now))))))))
+                                (do (println "I am recieving a ping request from the kernel")
+                                (send-net _ (util/package (first payload) (util/time-now)))))))))
 
-    ;A go block used for effi otherciency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
+    ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
     
     (async/go
       (loop []
         (let [^String data (async/<! (:network-in-channel @total-channel-list))]
-          (let [parsed-msg (split data #"\|") data-map (read-string (second parsed-msg))]
+          (let [parsed-msg (split data #"\|") 
+                data-map (read-string (second parsed-msg))]
             (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
               (lamina/enqueue ch data-map))))
         (if @alive
@@ -876,13 +879,14 @@
 
       (if (= nil (subscribe-and-wait unit ch :timeout 1500))
         (do
+          (println "subscribe-and-wait timed out from ping-cpu returning nil")
           (if lock
              (unlock unit))
           nil)
         ;else
         (do
       ;Ping the CPU!
-
+         
          (send-net unit (util/package "ping" [ip] [PING ch-name]))
       ;Wait for the message for the specified length of time...
          (let [result (deref (lamina/read-channel ch) timeout nil)]   
@@ -898,7 +902,7 @@
         
              (if result 
               (util/time-passed start-time)
-               result))))))
+               (println "deref timed out from ping-cpu returning nil")))))))
 
 (defn ping-channel 
   [unit channel-name & {:keys [timeout lock] :or {timeout 1000 lock true}}]
@@ -952,17 +956,16 @@
   (let [rebuild-tasks (atom [])]
     (doseq [i  @(:task-list unit)]
       (doseq [k (:consumes (second i))]
-        (if (= (first (keys @(:external-channel-list unit))) k)
-          (do(println (k @(:external-channel-list unit)))
-          (remove-channel unit (k @(:external-channel-list unit)))
-          (on-pool t/exec 
-                   (loop []
-                     (let [new-ch (genchan unit k)]
-                       (if new-ch
-                         (t/attach (second i) new-ch)
-                         (recur)))))))))))
-
-                        
+         (if (contains? (keys @(:external-channel-list unit)) k)
+           (do
+             (println "recreating channel:  "(k @(:external-channel-list unit)))
+             (remove-channel unit (k @(:external-channel-list unit)))
+             (on-pool t/exec 
+                      (loop []
+                        (let [new-ch (genchan unit k)]
+                          (if new-ch
+                            (t/attach (second i) new-ch)
+                            (recur)))))))))))
 
 (defn into-physicloud
   
@@ -1015,8 +1018,7 @@
 
       ;;insert algorithm here to determine sever
     
-
-    
+      
       (when (not @found)
         (if (= (first neighbor-ips) (:ip-address unit))  
           ;The case where this unit is the lowest IP

@@ -1,4 +1,4 @@
-(defproject PhysiCloud "0.1.0-SNAPSHOT"
+(defproject PhysiCloud "1.0.0"
   :description "PhysiCloud: A software platform to facilitate the programming of cyber-physical systems."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
