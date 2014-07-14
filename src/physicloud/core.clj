@@ -117,12 +117,12 @@
       
         (= code "ping")
         
-        (do (println "Server telling the client" client-ip "client they are recieving a ping")
-        ;Tell a SINGLE client that they are receiving a ping!
-      
-        (if (= (first (read-string (first payload))) client-ip)
-          ;(> (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))) 0)
-          (lamina/enqueue client-channel (str "kernel|"(second payload)))))
+        (do
+          (let [kernel-list @(:kernel @channel-list) client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
+            (when client-to-ping
+              (doseq [i (keys kernel-list)]
+                (if (= (get kernel-list i) client-to-ping)
+                  (lamina/enqueue i (str "kernel|"(second payload))))))))
          
       
         (= code "ping-channel")
