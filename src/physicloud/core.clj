@@ -96,7 +96,7 @@
   
   (handler
     [this msg]
-    
+    (println "message received by the client handler:  " msg)
     (let [
         
         parsed-msg (clojure.string/split msg #"\|")
@@ -104,7 +104,7 @@
         code (first parsed-msg) 
         
         payload (rest parsed-msg)]
-        
+
       (cond
       
         (= code "subscribe")
@@ -120,8 +120,10 @@
         (do (println "Server telling the client" client-ip "client they are recieving a ping")
         ;Tell a SINGLE client that they are receiving a ping!
       
-        (if (> (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))) 0)
+        (if (= (first (read-string (first payload))) client-ip)
+          ;(> (reduce (fn [val x] (if (= x client-ip) (inc val))) 0 (read-string (first payload))) 0)
           (lamina/enqueue client-channel (str "kernel|"(second payload)))))
+         
       
         (= code "ping-channel")
                         ;code                ;payload
