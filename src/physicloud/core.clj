@@ -286,15 +286,16 @@
                      (println "going over network to find channel: " data))
                          
                      ;Receive all the data from the temp. channel, subscribe to the network channel, and then request information of the given type.                                            
-                     (subscribe-and-wait unit ch) 
-                     (lamina/receive-all ch cb)
-                     (send-net unit (util/package "kernel" [REQUEST-INFORMATION-TYPE ch-name data]))
+                     (if (subscribe-and-wait unit ch) 
+                     (do
+                       (lamina/receive-all ch cb)
+                       (send-net unit (util/package "kernel" [REQUEST-INFORMATION-TYPE ch-name data]))
     
                      ;Take a nap while the 'cb' collects 'data'!
-                     (Thread/sleep listen-time)
+                       (Thread/sleep listen-time)
     
                      ;Wake up and unsubscribe from the channels!
-                     (remove-channel unit ch)
+                       (remove-channel unit ch)))
     
                      @collected-data)]   
         
@@ -576,7 +577,9 @@
      (lamina/receive channel cb)
      (send-net _ (util/package "subscribe" (name (:name (meta channel)))))
      
-     (deref p 2000 nil)))
+     (if (deref p 2000 nil)
+       (do (println "*subscribe and wait was successful...." (:name (meta channel))) true)
+       (println "***subscribe and wait was NOT successful...." (:name (meta channel))))))
      
      ;loop to ensure the subscribe and wait does not take longer than the timeout period
 ;     (loop [start-time (util/time-now)]
@@ -972,6 +975,7 @@
       (doseq [k (:consumes (second i))]
          (if (contains? (set (keys @(:external-channel-list unit))) k)
            (do
+             (t/detach (second i) (k @(:external-channel-list unit)))
              (println "recreating channel:  " k)
              (rebuild-fn unit k (second i))
              (remove-channel unit (k @(:external-channel-list unit)))))))))
