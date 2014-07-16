@@ -956,19 +956,20 @@
 ;;this function determines which tasks need to look for dependencies again on server reboot
 ;; and rebuilds the channels
 (defn rebuild-network-tasks [unit]
-  (let [rebuild-tasks (atom [])]
-    (doseq [i  @(:task-list unit)]
-      (doseq [k (:consumes (second i))]
-         (if (contains? (keys @(:external-channel-list unit)) k)
-           (do
-             (println "recreating channel:  "(k @(:external-channel-list unit)))
-             (remove-channel unit (k @(:external-channel-list unit)))
-             (on-pool t/exec 
+  (let [rebuild-fn (fn [unit data task-to-attach]
+                     (on-pool t/exec 
                       (loop []
-                        (let [new-ch (genchan unit k)]
+                        (let [new-ch (genchan unit data)]
                           (if new-ch
-                            (t/attach (second i) new-ch)
-                            (recur)))))))))))
+                            (t/attach task-to-attach new-ch)
+                            (recur))))))]
+    (doseq [i @(:task-list unit)]
+      (doseq [k (:consumes (second i))]
+         (if (contains? (set (keys @(:external-channel-list unit))) k)
+           (do
+             (println "recreating channel:  " k)
+             (rebuild-fn unit k (second i))
+             (remove-channel unit (k @(:external-channel-list unit)))))))))
 
 (defn into-physicloud
   
