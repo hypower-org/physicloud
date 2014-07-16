@@ -301,22 +301,23 @@
       ;If the data still is not in local lists ... and you actually got something
       (if-not (contains? (merge @(:external-channel-list unit) @(:internal-channel-list unit)) data)
        (if-not (empty? net-data)
-        (let [
-              ;Choose the first CPU that responded!
-              chosen (first net-data)
-              ;Make a network channel name for the data-type!
-              ch-name (name data)
-              ;Make a networked channel for the data!
-              ch (let [ch (external-channel unit data)]
-                   (println "making networked channel for data: " data)
-                   (subscribe-and-wait unit ch :timeout 1500) 
-                   ch)]                       
-          ;Unlock if you're supposed to!
-          (if lock 
-            (unlock unit))                           
-          ;Tell the chosen CPU to publish data!
-          (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
-          ch)
+        (do (println "the first to respond to the" data " data was..: "(first net-data))
+         (let [
+               ;Choose the first CPU that responded!
+               chosen (first net-data)
+               ;Make a network channel name for the data-type!
+               ch-name (name data)
+               ;Make a networked channel for the data!
+               ch (let [ch (external-channel unit data)]
+                    (println "making networked channel for data: " data)
+                    (subscribe-and-wait unit ch :timeout 1500) 
+                    ch)]                       
+           ;Unlock if you're supposed to!
+           (if lock 
+             (unlock unit))                           
+           ;Tell the chosen CPU to publish data!
+           (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
+           ch))
         (do
           ;Unlock if you're supposed to!
           (println "that data wasnt found anywhere")
@@ -580,7 +581,7 @@
       (if (and (false? @timeout?) (false? @p))
         (recur start-time)
         (if @timeout? 
-          nil
+          (println "subscribe-and-wait timed out")
           true)))))
   
  (construct
@@ -745,21 +746,21 @@
                             (let [code (first data) payload (rest data)]
     
                               (cond
+                               
+                                (= code ip-address)
                                 
-;                                ; What is this code for? 
-;                                (= code ip-address)
-;                                
-;                                ;This is a temporary solution to this problem. What problem?
-;                                (do
-;                                  ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
-;                                  
-;                                  (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
-;                                                  :type "event"
-;                                                  :consumes #{(keyword (first payload))}
-;                                                  :function (fn [map] 
-;                                                              (if (ping-channel _ (first payload))
-;                                                                (send-net _ (util/package (first payload) (dissoc map :this))) 
-;                                                                (do (println "DIE") (kill-task _ (:name (:this map))))))}))
+                                ;This is a temporary solution to this problem. What problem?
+                                (do
+                                  ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
+                                  (println "Publishing data across network:  "(str "siphon -> " (first payload) " -> " (second payload)))
+                                  (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
+                                                  :type "event"
+                                                  :consumes #{(keyword (first payload))}
+                                                  :function (fn [map] 
+                                                              ;(if (ping-channel _ (first payload))
+                                                                (send-net _ (util/package (first payload) (dissoc map :this))))}))
+                                                                ;(do (println "Closing networked channel") (kill-task _ (:name (:this map))))
+                                                                ;))}))
       
                                 (= code REQUEST-REPEATER)
                                 
@@ -790,7 +791,7 @@
                                 ;PING expects [OP-CODE name-of-network-channel]
                 
                                 (= code PING)
-                                (do (println "I am recieving a ping request from the kernel")
+                                ;(do (println "I am recieving a ping request from the kernel")
                                 (send-net _ (util/package (first payload) (util/time-now)))))))))
 
     ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
