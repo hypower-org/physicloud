@@ -96,7 +96,7 @@
   
   (handler
     [this msg]
-    (println "message received by the client handler:  " msg)
+    ;(println "message received by the client handler:  " msg)
     (let [
         
         parsed-msg (clojure.string/split msg #"\|")
@@ -758,9 +758,9 @@
                                                   :consumes #{(keyword (first payload))}
                                                   :function (fn [map] 
                                                               ;(if (ping-channel _ (first payload))
-                                                                (send-net _ (util/package (first payload) (dissoc map :this))))}))
+                                                                (send-net _ (util/package (first payload) (dissoc map :this)))
                                                                 ;(do (println "Closing networked channel") (kill-task _ (:name (:this map))))
-                                                                ;))}))
+                                                                )}))
       
                                 (= code REQUEST-REPEATER)
                                 
@@ -792,7 +792,7 @@
                 
                                 (= code PING)
                                 ;(do (println "I am recieving a ping request from the kernel")
-                                (send-net _ (util/package (first payload) (util/time-now)))))))))
+                                (send-net _ (util/package (first payload) (util/time-now))))))))
 
     ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
