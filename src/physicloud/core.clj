@@ -63,7 +63,7 @@
 (declare subscribe-and-wait)
 (declare into-physicloud)
 
-(defmacro on-pool
+(defmacro on-pool 
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
   [^ScheduledThreadPoolExecutor pool & code]
   `(.execute ~pool (fn [] (try ~@code (catch Exception e# (println (str "caught exception: \"" (.getMessage e#) (.printStackTrace e#))))))))
