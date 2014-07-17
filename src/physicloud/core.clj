@@ -779,7 +779,7 @@
                                 ;Requests data!  If the CPU has the data, it will respond with its 'ip-address'!
                                 ; unit (util/package "kernel" [REQUEST-INFORMATION-TYPE ch-name data])
                                (do
-                                (println "I am recieving a request for the following data: " (second payload))
+                                (println "I am receiving a request for the following data: " (second payload))
                                 (when ((second payload) @total-channel-list)
                                   (send-net _ (util/package (first payload) [ip-address]))))
                                 
