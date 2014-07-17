@@ -570,29 +570,16 @@
  
  (subscribe-and-wait
    [_ channel]
-;   [_ channel & {:keys [timeout] :or {timeout 1500}}]
    ;Subscribe to a channel, but wait until the server has completed initializing it
    (let [p (promise)
-;         p (atom false)    
          cb (fn [x] (deliver p true))]
-;         timeout? (atom false)]
      (lamina/receive channel cb)
      (send-net _ (util/package "subscribe" (name (:name (meta channel)))))
-     
      (if (deref p 2000 nil)
-       (do (println "*subscribe and wait was successful...." (:name (meta channel))) true)
-       (println "***subscribe and wait was NOT successful...." (:name (meta channel))))))
-     
-     ;loop to ensure the subscribe and wait does not take longer than the timeout period
-;     (loop [start-time (util/time-now)]
-;      (if (> (util/time-passed start-time) timeout)
-;        (reset! timeout? true))
-;      (if (and (false? @timeout?) (false? @p))
-;        (recur start-time)
-;        (if @timeout? 
-;          (println "subscribe-and-wait timed out")
-;          true))))
-;   )
+       (do ;(println "*subscribe and wait was successful...." (:name (meta channel))) 
+         true)
+         (println "***subscribe and wait was NOT successful...." (:name (meta channel))))))
+
   
  (construct
    [_ gc-fn]
@@ -811,7 +798,7 @@
         (let [parsed-msg (split msg #"\|") 
               data-map (read-string (second parsed-msg))]
           (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
-            (println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
+            ;(println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
             (lamina/enqueue ch data-map)))))
                         
                         
@@ -901,7 +888,6 @@
 
       (if (= nil (subscribe-and-wait unit ch))
         (do
-          (println "subscribe-and-wait timed out from ping-cpu returning nil")
           (if lock
              (unlock unit))
           nil)
