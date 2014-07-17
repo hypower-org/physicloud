@@ -5,7 +5,7 @@
  ;This test demonstrates the creation of a basic Cyber Physical Unit in PhysiCloud.
 
 ; Create a CPU at the provided IP address.
-(def test-cpu (core/cyber-physical-unit "10.10.10.10"))
+(def test-cpu (core/cyber-physical-unit "10.10.10.5"))
 
 (defn producerfn []
   (println "Producer producing...") {:producer "42"})

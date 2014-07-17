@@ -228,7 +228,8 @@
         (lamina/siphon (:network-out-channel @(:total-channel-list unit)) client)
     
         ;Take all of the data from the client and 'put' it into a core.async channel!
-        (lamina/receive-all client (fn [msg] (util/lamina-to-async (:network-in-channel @(:total-channel-list unit)) msg)))
+       (lamina/siphon client (:network-in-channel @(:total-channel-list unit)))
+       ;(lamina/receive-all client (fn [msg] (println "putting message from client-ch to net-in-ch: " msg )(util/lamina-to-async (:network-in-channel @(:total-channel-list unit)) msg)))
 
         client))))
 
@@ -597,7 +598,7 @@
      
    ;Inbound and outbound network channels
    (internal-channel _ :network-out-channel)
-   (swap! total-channel-list assoc :network-in-channel (async/chan (async/sliding-buffer 100))) 
+  ;(swap! total-channel-list assoc :network-in-channel (async/chan (async/sliding-buffer 100))) 
     
     
    ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.
@@ -804,16 +805,25 @@
 
     ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
-    
-    (async/go
-      (loop []
-        (let [^String data (async/<! (:network-in-channel @total-channel-list))]
-          (let [parsed-msg (split data #"\|") 
-                data-map (read-string (second parsed-msg))]
-            (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
-              (lamina/enqueue ch data-map))))
-        (if @alive
-          (recur))))
+    (lamina/receive-all (internal-channel _ :network-in-channel)  
+      (fn [msg]
+        (let [parsed-msg (split msg #"\|") 
+              data-map (read-string (second parsed-msg))]
+          (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
+            (println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
+            (lamina/enqueue ch data-map)))))
+                        
+                        
+;    (async/go
+;      (loop []
+;        (let [^String data (async/<! (:network-in-channel @total-channel-list))]
+;          (let [parsed-msg (split data #"\|") 
+;                data-map (read-string (second parsed-msg))]
+;            (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
+;              (println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
+;              (lamina/enqueue ch data-map))))
+;        (if @alive
+;          (recur))))
     _)
 
   ICPUTaskUtil
