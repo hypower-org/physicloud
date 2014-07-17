@@ -1,9 +1,11 @@
 (ns physicloud.utilities
   (:require [lamina.core :as lamina]
             [lanterna.terminal :as term]
-            [clojure.core.async :as async])
+          ;  [clojure.core.async :as async]
+          )
   (:import [lamina.core.channel Channel]
-           [clojure.core.async.impl.channels ManyToManyChannel]))
+          ; [clojure.core.async.impl.channels ManyToManyChannel]
+           ))
 
 ;(def terminal (term/get-terminal :swing))
 ;(term/start terminal)
@@ -19,10 +21,10 @@
 ;      (reset! current-line 0)
 ;      (write-to-terminal args))))
 
-(defn lamina-to-async
-  "Handles translation from core.async to lamina channels"
-  [^ManyToManyChannel async-channel message]
-  (async/put! async-channel message)) 
+;(defn lamina-to-async
+;  "Handles translation from core.async to lamina channels"
+;  [^ManyToManyChannel async-channel message]
+;  (async/put! async-channel message)) 
 
 (defmacro time+ 
   "Ouputs the time the operation took as a double (in ms).  First YCP macro! #1"

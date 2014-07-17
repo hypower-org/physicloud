@@ -5,12 +5,13 @@
             [aleph.tcp :as aleph]
             [physicloud.task :as t]
             [physicloud.utilities :as util]
-            [clojure.core.async.impl.concurrent :as conc]
-            [clojure.core.async.impl.exec.threadpool :as tp]
-            [clojure.core.async :as async])
+           ;[clojure.core.async.impl.concurrent :as conc]
+            ;[clojure.core.async.impl.exec.threadpool :as tp]
+           ; [clojure.core.async :as async]
+           )
   (:use [clojure.string :only (join split)])
   (:import [lamina.core.channel Channel]
-           [clojure.core.async.impl.channels ManyToManyChannel]
+          ; [clojure.core.async.impl.channels ManyToManyChannel]
            [java.util.concurrent TimeUnit]
            [java.util.concurrent Executors]
            [java.util.concurrent ScheduledThreadPoolExecutor]
@@ -21,13 +22,13 @@
 
 (set! *warn-on-reflection* true)
 
-(defonce ^{:private true} my-executor
-  (java.util.concurrent.Executors/newFixedThreadPool
-   (.availableProcessors (Runtime/getRuntime))
-   (conc/counted-thread-factory "my-async-dispatch-%d" true)))
+;(defonce ^{:private true} my-executor
+;;  (java.util.concurrent.Executors/newFixedThreadPool
+;   (.availableProcessors (Runtime/getRuntime))
+;   (conc/counted-thread-factory "my-async-dispatch-%d" true)))
 
-(alter-var-root #'clojure.core.async.impl.dispatch/executor
-                (constantly (delay (tp/thread-pool-executor t/exec))))
+;(alter-var-root #'clojure.core.async.impl.dispatch/executor
+;                (constantly (delay (tp/thread-pool-executor t/exec))))
 
 ;Networking message constants!
 (def ^{:private true} REQUEST-REPEATER 2)

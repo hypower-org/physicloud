@@ -11,7 +11,7 @@
                  [gloss "0.2.2"]
                  [criterium "0.4.3"]
                  [org.clojure/data.csv "0.1.2"]
-                 [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
+               ;  [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
                  ;[incanter/incanter-core "1.5.4"]
                  ;[incanter/incanter-charts "1.5.4"]
                  ;[incanter "1.5.4"]
