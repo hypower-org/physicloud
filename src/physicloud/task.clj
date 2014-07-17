@@ -10,7 +10,7 @@
 (set! *warn-on-reflection* true)
 
 (def tasks (atom {}))
-(def ^ScheduledThreadPoolExecutor exec (Executors/newScheduledThreadPool (.availableProcessors (Runtime/getRuntime))))
+(def ^ScheduledThreadPoolExecutor exec (Executors/newScheduledThreadPool (* 2 (.availableProcessors (Runtime/getRuntime)))))
 
 (declare mutate)
 (declare obliterate)
