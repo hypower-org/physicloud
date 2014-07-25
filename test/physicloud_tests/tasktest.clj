@@ -7,7 +7,7 @@
 ; Create a CPU at the provided IP address.
 (def test-cpu (core/cyber-physical-unit "10.42.43.3"))
 
-(core/on-pool t/exec (core/into-physicloud test-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!"))))
+(core/into-physicloud test-cpu :heartbeat 5000 :on-disconnect (fn [] (println "Disconnected!")))
 
 (Thread/sleep 2000)
 

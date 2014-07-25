@@ -976,85 +976,85 @@
    @on-disconnect the function to be run if/when the CPU is disconnected. Default nil"
   
   [unit  & {:keys [on-disconnect] :or {on-disconnect nil}}]
-
-  (loop [initial-establish? true]
+  (on-pool kernel-exec
+           (loop [initial-establish? true]
     
-  ;Make the UDP client and wait for it to be initialized!
-    (if initial-establish?
-    @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
+           ;Make the UDP client and wait for it to be initialized!
+             (if initial-establish?
+             @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
   
-    (let [
-          ;Make an atom for convenience
+             (let [
+                   ;Make an atom for convenience
         
-          found (atom false) 
+                   found (atom false) 
         
-          ;Get my neighbors via UDP broadcast!
+                   ;Get my neighbors via UDP broadcast!
         
-          neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST]))
+                   neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST]))
         
-          ;Convert the keys in the map to strings!
+                   ;Convert the keys in the map to strings!
         
-          neighbors (zipmap (doall (map name (keys neighbors))) (vals neighbors))
+                   neighbors (zipmap (doall (map name (keys neighbors))) (vals neighbors))
         
-          ;Get the ip's of the neighbors and put them into a set!
+                   ;Get the ip's of the neighbors and put them into a set!
         
-          neighbor-ips (set (keys neighbors))]
+                   neighbor-ips (set (keys neighbors))]
 
-      ;Figure out if a server is already in existence...
-      (println neighbor-ips)
-      (doseq [k neighbor-ips :while (false? @found)]
-        (when (not= (get neighbors k) "NA")
+               ;Figure out if a server is already in existence...
+               (println neighbor-ips)
+               (doseq [k neighbor-ips :while (false? @found)]
+                 (when (not= (get neighbors k) "NA")
         
-          ;Found a server!  Change the unit' IP to match and start a TCP client!
+                   ;Found a server!  Change the unit' IP to match and start a TCP client!
         
-          (change-server-ip unit (get neighbors k))
-          (reset! found true)
-          (println "Server found")
-          (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])
-          (if-not initial-establish?
-            (rebuild-network-tasks unit))))
+                   (change-server-ip unit (get neighbors k))
+                   (reset! found true)
+                   (println "Server found")
+                   (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])
+                   (if-not initial-establish?
+                     (rebuild-network-tasks unit))))
       
-      ;When a server isn't in existence, the LOWEST ip starts the server!
+               ;When a server isn't in existence, the LOWEST ip starts the server!
 
-      ;;insert algorithm here to determine sever
+               ;;insert algorithm here to determine sever
     
       
-      (when (not @found)
-        (if (= (first neighbor-ips) (:ip-address unit))  
-          ;The case where this unit is the lowest IP
-          (do 
-            (println "No server found. Establishing server...")
-            (instruction unit [START-SERVER 8998])
-            (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
-            (if-not initial-establish?
-              (rebuild-network-tasks unit)))      
+               (when (not @found)
+                 (if (= (first neighbor-ips) (:ip-address unit))  
+                   ;The case where this unit is the lowest IP
+                   (do 
+                     (println "No server found. Establishing server...")
+                     (instruction unit [START-SERVER 8998])
+                     (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
+                     (if-not initial-establish?
+                       (rebuild-network-tasks unit)))      
           
-        ;The case where this unit is NOT the lowest ip
-        (do
-          ;hang on the server initialization
-          (loop []
-            (if @(:wait-for-server? unit) 
-              (recur)))
-          (println "Connecting to: " @(:server-ip unit))
-          (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])
-          (if-not initial-establish?
-            (rebuild-network-tasks unit))))))
+                 ;The case where this unit is NOT the lowest ip
+                 (do
+                   ;hang on the server initialization
+                   (loop []
+                     (if @(:wait-for-server? unit) 
+                       (recur)))
+                   (println "Connecting to: " @(:server-ip unit))
+                   (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])
+                   (if-not initial-establish?
+                     (rebuild-network-tasks unit))))))
   
-  ;Check @ 'heartbeat' if the connection to the server is still alive
+           ;Check @ 'heartbeat' if the connection to the server is still alive
   
-   (loop []
-     (Thread/sleep 1000)
-      (if (ping-cpu unit (:ip-address unit))
-        (recur)
+            (loop []
+              (Thread/sleep 1000)
+               (if (ping-cpu unit (:ip-address unit))
+                 (recur)
       
-        ;If there is supposed to be a function run on disconnect, run it!
-        (do (println "connection to server lost")
-          (reset! (:server-ip unit) "NA")
-          (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and 
-                              ;;if the server is actually down, they will also discovering
-          @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
-          (reset! (:wait-for-server? unit) true))))
-  (recur false)))
+                 ;If there is supposed to be a function run on disconnect, run it!
+                 (do (println "connection to server lost")
+                   (reset! (:server-ip unit) "NA")
+                   (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and 
+                                       ;;if the server is actually down, they will also discovering
+                   @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
+                   (reset! (:wait-for-server? unit) true))))
+           (recur false))))
 
 
 

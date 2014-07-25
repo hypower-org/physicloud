@@ -10,7 +10,7 @@
 (defn producerfn []
   (println "Producer producing...") {:producer "42"})
 
-(core/on-pool t/exec (core/into-physicloud test-cpu))
+(core/into-physicloud test-cpu)
 
 
 (core/task test-cpu {:name "producer"
