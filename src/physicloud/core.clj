@@ -117,8 +117,6 @@
          
       
         (= code "ping-channel")
-                        ;code                ;payload
-        ;unit (util/package "ping-channel" [(:ip-address unit) channel-name ch-name]))
        
         ;Check how many people are listening to a channel!
         (let [processed-payload (read-string (first payload))     
@@ -149,9 +147,8 @@
   
   (tcp-client-handler
     [this channel client-info]
-    (let [
-        
-        client-handler (->ClientHandler client-list channel (:address client-info))]
+    
+    (let [client-handler (->ClientHandler client-list channel (:address client-info))]
         
       (lamina/receive-all channel (fn [msg] (handler client-handler msg)))))
   
@@ -337,15 +334,15 @@
   (let [args# (second function)]
     
     `(task-builder ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
-                         :consumes ~(set (doall (map keyword (rest args#))))
-                         :produces ~produces
-                         :name ~name
-                         :update-time ~update-time
-                         :type (if ~update-time "time" "event")
-                         :listen-time 1000
-                         :on-established ~on-established
-                         :without-locking ~without-locking
-                         :init ~init})))
+                          :consumes ~(set (doall (map keyword (rest args#))))
+                          :produces ~produces
+                          :name ~name
+                          :update-time ~update-time
+                          :type (if ~update-time "time" "event")
+                          :listen-time 1000
+                          :on-established ~on-established
+                          :without-locking ~without-locking
+                          :init ~init})))
 
 (defn task-builder
   
@@ -388,6 +385,8 @@
       (not type) (println "No type supplied (time or event)") 
 
       (not function) (println "No function supplied")
+      
+      (and (= type "event") (> (count (:consumes task-options)) 1)) (println "an event task can only consume one thing") 
   
       :else      
        (let [new-task (t/task-factory task-options) 
@@ -456,7 +455,6 @@
 (defn garbage-collect 
   "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
   [unit]
-;  (println "Collect!")
   (let [ch-list @(:total-channel-list unit)]
     (doseq [i (keys ch-list)]
       (let [ch (get ch-list i)]
@@ -503,7 +501,6 @@
    [_ name]
    
    ;If the channel doesn't already exist, put it into the big list o' channels!
-   
  (if-not (contains? @total-channel-list name)
    (let [^Channel ch (with-meta (lamina/permanent-channel) {:name name})]
      (swap! total-channel-list assoc name ch)
@@ -532,7 +529,6 @@
    [_ channel]
    
    ;Remove everything!  Close the channel, remove it from all the lists, and attempt to unsubscribe from it over the network!
-   
    (let [ch-name (:name (meta channel))]
      (lamina/force-close channel)
      (swap! internal-channel-list dissoc ch-name)
@@ -594,12 +590,10 @@
     
    (lamina/receive-all (internal-channel _ :input-channel)
                        (fn [x]
-                         (let [code (first x) payload (rest x)]                                                  
-                                          
+                         (let [code (first x) payload (rest x)]                                                                
+                           
                            (cond
-                             
                              ;START-SERVER expects [OP-CODE port]
-                            
                              (= code START-SERVER)
                                             
                              (let [server (tcp-server (first payload))]
@@ -640,7 +634,6 @@
                                    data (atom {})
                                                  
                                    ;The UDP broadcasting follows a certain protocol!  If hello? is sent, the CPUs listening respond with hello! and the server that they are 
-                                   
                                    ;connect to's ip!
                                    
                                    listener-cb (fn udp-client-actions
@@ -651,11 +644,9 @@
                                                      (= code "Server-up!")(do (reset! server-ip sender) (reset! wait-for-server? false))
                                                      (= code "hello?") (lamina/enqueue broadcast-channel {:host sender :port 8999 :message (str "hello! " @server-ip)})
                                                      (= code "hello!") (swap! data assoc (keyword sender) (second (clojure.string/split (:message udp-packet) #"\s+"))))))]
-                               
                                (lamina/receive-all broadcast-channel listener-cb)       
                                
-                               ;UDP-BROADCAST expects [OP-CODE]
-                                              
+                               ;UDP-BROADCAST expects [OP-CODE]     
                                (let [broadcast-task (task _ {:name "udp-broadcast"                                                  
                                                              :without-locking true    
                                                              :function (fn [this input-channel]         
@@ -682,17 +673,14 @@
                                                       (when (= (first input-channel) STOP-UDP-CLIENT)
                                                         
                                                         ;If killed, close the UDP channel, remove this task, and remove the broadcasting task
-                                                        
                                                         (lamina/force-close broadcast-channel)
                                                         (kill-task _ (:name this))
                                                         (kill-task _ (:name broadcast-task))))})))                                                 
                                             
                               (= code LOCK-GC)
-                              
                               ;LOCK-GC expects [OP-CODE]
                               
                               ;This instruction locks the GC so that it won't remove channels that you're trying to create!  Can be tricky to use...be careful!
-                              
                               ;So, you should stick with the wait-for-lock and unlock functions provided :)
                                             
                               (let [p (promise)]
@@ -736,9 +724,8 @@
                                
                                 (= code ip-address)
                                 
-                                ;This is a temporary solution to this problem. What problem?
+                                ;This is a temporary solution to this problem.
                                 (do
-                                  ;(write-to-terminal "siphon -> " (first payload) " -> " (second payload))
                                   (println "Publishing data across network:  "(str "siphon -> " (first payload) " -> " (second payload)))
                                   (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
                                                   :type "event"
@@ -780,6 +767,7 @@
                                 (= code PING)
                                 ;(do (println "I am recieving a ping request from the kernel")
                                 (send-net _ (util/package (first payload) (util/time-now))))))))
+    
 
     ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the 
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
@@ -789,19 +777,7 @@
               data-map (read-string (second parsed-msg))]
           (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
             ;(println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
-            (lamina/enqueue ch data-map)))))
-                        
-                        
-;    (async/go
-;      (loop []
-;        (let [^String data (async/<! (:network-in-channel @total-channel-list))]
-;          (let [parsed-msg (split data #"\|") 
-;                data-map (read-string (second parsed-msg))]
-;            (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
-;              (println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
-;              (lamina/enqueue ch data-map))))
-;        (if @alive
-;          (recur))))
+            (lamina/enqueue ch data-map)))))                  
     _)
 
   ICPUTaskUtil
@@ -834,7 +810,6 @@
   "Creates a new CPU with the given IP!"
   [ip]
   ;Construct a cpu.  Give it a bunch of maps to store stuff in, an IP, a server ip (atomic so that it can change), a variable to determine if the CPU is still
-  
   ;"alive", and an anonymous function containing the garbage collector!
   
   (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true) (atom true)) (fn [x] (garbage-collect x)))]
@@ -863,28 +838,22 @@
 
     (let [
           ;Make a channel over which the ping data will be recieved!
-        
           ch-name (str (gensym (str "p_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))
           
           ;Create the temp channel
-        
           ch (temporary-channel unit (keyword ch-name))    
           
           ;Get the time right now!
-        
           start-time (util/time-now)]
     
       ;Subscribe to a channel and wait for it to be initialized!  This action is important because there will only be ONE message over this channel
-
       (if (= nil (subscribe-and-wait unit ch))
         (do
           (if lock
              (unlock unit))
           nil)
-        ;else
         (do
       ;Ping the CPU!
-         
          (send-net unit (util/package "ping" [ip] [PING ch-name]))
       ;Wait for the message for the specified length of time...
          (let [result (deref (lamina/read-channel ch) timeout nil)]   
@@ -892,60 +861,48 @@
            (remove-channel unit ch)
         
            ;If supposed to lock...
-        
            (if lock
              (unlock unit))
              
            ;If a result was actually obtained, return the time passed.  Otherwise, return the result (which is nil)
-        
              (if result 
               (util/time-passed start-time)
                (println "deref timed out from ping-cpu returning nil")))))))
 
 (defn ping-channel 
   [unit channel-name & {:keys [timeout lock] :or {timeout 1000 lock true}}]
-  ;unit (clojure.core/name data) :lock false
   
   ;If supposed to lock...
-  
   (if lock
     (wait-for-lock unit))
   
     (let [
           
           ;Generate a channel name!
-        
           ch-name (str (gensym (str "pc_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))
           
           ;Make the temp. channel!
-        
           ch (temporary-channel unit (keyword ch-name))   
           
           ;Get the time now!
-        
           start-time (util/time-now)]
       
       ;Subscribe and wait for the channel to be initialized on the network because we're only getting ONE message
-    
       (subscribe-and-wait unit ch)
       
       ;Ping the channel!
-      
       (send-net unit (util/package "ping-channel" [(:ip-address unit) channel-name ch-name]))
       
       ;Wait for our response...
-    
       (let [result (deref (lamina/read-channel ch) timeout nil)]    
       
         (remove-channel unit ch)
         
         ;If supposed to lock...
-        
         (if lock
           (unlock unit))
       
         ;Return the result!
-        
         result)))
 
 ;;this function determines which tasks need to look for dependencies again on server reboot
@@ -985,19 +942,15 @@
   
              (let [
                    ;Make an atom for convenience
-        
                    found (atom false) 
         
                    ;Get my neighbors via UDP broadcast!
-        
                    neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST]))
         
                    ;Convert the keys in the map to strings!
-        
                    neighbors (zipmap (doall (map name (keys neighbors))) (vals neighbors))
         
                    ;Get the ip's of the neighbors and put them into a set!
-        
                    neighbor-ips (set (keys neighbors))]
 
                ;Figure out if a server is already in existence...
@@ -1051,7 +1004,7 @@
                  (do (println "connection to server lost")
                    (reset! (:server-ip unit) "NA")
                    (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and 
-                                       ;;if the server is actually down, they will also discovering
+                                       ;;if the server is actually down, they will also start discovery
                    @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
                    (reset! (:wait-for-server? unit) true))))
            (recur false))))
