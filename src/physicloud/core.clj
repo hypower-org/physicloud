@@ -359,7 +359,7 @@
 
       (not function) (println "No function supplied")
 
-      (and (= type "event") (> (count (:consumes task-options)) 1)) (println "an event task can only consume one thing")
+      (and (= type "event") (> (count (:consumes task-options)) 1)) (println "Error: event tasks may have only one dependency.")
 
       :else
        (let [new-task (t/task-factory task-options)
@@ -504,13 +504,12 @@
      (lamina/receive channel cb)
      (send-net _ (util/package "subscribe" (name (:name (meta channel)))))
      (if (deref p 2000 nil)
-       (do ;(println "*subscribe and wait was successful...." (:name (meta channel)))
-         true)
-         (println "***subscribe and wait was NOT successful...." (:name (meta channel))))))
+       true
+       (println "Subscription failed: " (:name (meta channel))))))
 
 
  (construct
-   [_]; gc-fn]
+   [_]
 
    ;Inbound and outbound network channels
    (internal-channel _ :network-out-channel)
