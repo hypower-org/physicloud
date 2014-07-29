@@ -5,9 +5,9 @@
  ;This test demonstrates the creation of a basic Cyber Physical Unit in PhysiCloud.
 
 ; Create a CPU at the provided IP address.
-
+(defn -main [ip]
 ;; edit this for a specific cpu's ip
-(def test-cpu (core/cyber-physical-unit "10.10.10.5"))
+(def test-cpu (core/cyber-physical-unit ip))
 
 
 (core/into-physicloud test-cpu)
@@ -124,6 +124,6 @@
 )
 
 
-
+)
  
 

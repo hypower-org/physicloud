@@ -231,8 +231,8 @@
   ;Lock if you're supposed to!
 ;  (if lock
 ;    (wait-for-lock unit))
-  (if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5));;debug
-  (println "Checking locally to see if the channel-list.......contains: " data));;debug
+  ;(if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5));;debug
+  (println "Checking locally to see if the channel-list.......contains: " data);;debug
   ;Check if the CPU has the data locally..dependency met, return nil
   (cond 
    (contains? (merge @(:external-channel-list unit) @(:internal-channel-list unit)) data)
@@ -240,8 +240,8 @@
       ;Unlock if you're supposed to!
 ;     (if lock 
 ;       (unlock unit))
-     (if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5));;debug
-     (println "the "data" data was in the local list!")));;debug
+     ;(if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5));;debug
+     (println "the "data" data was in the local list!"));;debug
     
    ;see if data is already being consumed by someone over network
    ;used for efficiency to keep from channel replication
@@ -271,8 +271,8 @@
                          ;Collect all the data from the temporary channel in the atomic map!
                          cb (fn [x] (swap! collected-data conj (first x)))]
                           
-                     (if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5))
-                     (println "going over network to find channel: " data))
+                     ;(if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5))
+                     (println "going over network to find channel: " data)
                          
                      ;Receive all the data from the temp. channel, subscribe to the network channel, and then request information of the given type.                                            
                      (if (subscribe-and-wait unit ch) 
@@ -401,7 +401,7 @@
          (if (:consumes new-task)
           (on-pool kernel-exec
                    (loop []  
-                     (println "current thread: " (Thread/currentThread) " searching for: " (:consumes new-task))
+                     ;(println "current thread: " (Thread/currentThread) " searching for: " (:consumes new-task))
                      ;If the task supposed to lock...
 ;                     (if-not without-locking
 ;                       (wait-for-lock unit)) 
