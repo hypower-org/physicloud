@@ -30,8 +30,8 @@
 (def STOP-SERVER 1)
 (def START-TCP-CLIENT 2)
 (def STOP-TCP-CLIENT 3)
-(def LOCK-GC 4)
-(def UNLOCK-GC 5)
+;(def LOCK-GC 4)
+;(def UNLOCK-GC 5)
 (def START-UDP-CLIENT 6)
 (def STOP-UDP-CLIENT 7)
 (def UDP-BROADCAST 8)
@@ -41,17 +41,17 @@
 
 (declare temporary-channel)
 (declare remove-channel)
-(declare send-net)
+(declare send-net)0
 (declare external-channel)
 (declare internal-channel)
 (declare ping-channel)
 (declare parse-item)
-(declare wait-for-lock)
-(declare unlock)
+;(declare wait-for-lock)
+;(declare unlock)
 (declare subscribe-and-wait)
 (declare into-physicloud)
 
-(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool (* 2 (.availableProcessors (Runtime/getRuntime)))))
+(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  (* 2 (.availableProcessors (Runtime/getRuntime)))))
 
 (defmacro on-pool 
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
@@ -229,18 +229,18 @@
   [unit data & {:keys [listen-time lock] :or {listen-time 100 lock true}}]
   
   ;Lock if you're supposed to!
-  (if lock
-    (wait-for-lock unit))
-  (if (= data :awesome-data-map);;debug
+;  (if lock
+;    (wait-for-lock unit))
+  (if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5));;debug
   (println "Checking locally to see if the channel-list.......contains: " data));;debug
   ;Check if the CPU has the data locally..dependency met, return nil
   (cond 
    (contains? (merge @(:external-channel-list unit) @(:internal-channel-list unit)) data)
     (do    
       ;Unlock if you're supposed to!
-     (if lock 
-       (unlock unit))
-     (if (= data :awesome-data-map);;debug
+;     (if lock 
+;       (unlock unit))
+     (if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5));;debug
      (println "the "data" data was in the local list!")));;debug
     
    ;see if data is already being consumed by someone over network
@@ -248,11 +248,11 @@
    ;this will return the number of clients listening to a channel
    ;from server, returns nil if no such channel exists
    
-   (ping-channel unit (clojure.core/name data) :lock false) 
+   (ping-channel unit (clojure.core/name data)); :lock false) 
      ;Unlock if you're supposed to!
      (do
-       (if lock
-         (unlock unit))
+;       (if lock
+;         (unlock unit))
        (println "the server has this data!")
        (let [ch (external-channel unit data)]
          (subscribe-and-wait unit ch)
@@ -271,7 +271,7 @@
                          ;Collect all the data from the temporary channel in the atomic map!
                          cb (fn [x] (swap! collected-data conj (first x)))]
                           
-                     (if (= data :awesome-data-map)
+                     (if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5))
                      (println "going over network to find channel: " data))
                          
                      ;Receive all the data from the temp. channel, subscribe to the network channel, and then request information of the given type.                                            
@@ -303,16 +303,16 @@
                     (subscribe-and-wait unit ch) 
                     ch)]                       
            ;Unlock if you're supposed to!
-           (if lock 
-             (unlock unit))                           
+;           (if lock 
+;             (unlock unit))                           
            ;Tell the chosen CPU to publish data!
            (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
            ch))
         (do
           ;Unlock if you're supposed to!
           (println "that data wasnt found anywhere")
-          (if lock 
-            (unlock unit))           
+;          (if lock 
+;            (unlock unit))           
           nil))
        (println "the "data" data was in the local list!.......return nil!!!!")))))
 
@@ -401,9 +401,10 @@
          (if (:consumes new-task)
           (on-pool kernel-exec
                    (loop []  
+                     (println "current thread: " (Thread/currentThread) " searching for: " (:consumes new-task))
                      ;If the task supposed to lock...
-                     (if-not without-locking
-                       (wait-for-lock unit)) 
+;                     (if-not without-locking
+;                       (wait-for-lock unit)) 
                      ;For any types the task consumes, try to generate channels for them!
                      (doseq [i (:consumes new-task)]
                        (genchan unit i :listen-time listen-time :lock false)) 
@@ -422,12 +423,13 @@
                          (if on-established
                            (on-established))
                          ;If the task is supposed to lock...
-                         (if-not without-locking
-                           (unlock unit)))
+;                         (if-not without-locking
+;                           (unlock unit))
+                           )
                         ;If the task is supposed to lock...and recur if the system didn't have all the task dependencies
                        (do
-                         (if-not without-locking
-                           (unlock unit))
+;                         (if-not without-locking
+;                           (unlock unit))
                          (recur))))))
          
          (if (:produces new-task)
@@ -442,28 +444,28 @@
        new-task))))
 
 
-(defn- vec-contains
-  "Determines if a vector contains a given item"
-  [coll item]
-  (loop [i (dec (count coll))]
-               (if (= (nth coll i) item)
-                 true
-                 (if (> i 0)
-                   (recur (dec i))
-                   false))))
+;(defn- vec-contains
+;  "Determines if a vector contains a given item"
+;  [coll item]
+;  (loop [i (dec (count coll))]
+;               (if (= (nth coll i) item)
+;                 true
+;                 (if (> i 0)
+;                   (recur (dec i))
+;                   false))))
 
-(defn garbage-collect 
-  "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
-  [unit]
-  (let [ch-list @(:total-channel-list unit)]
-    (doseq [i (keys ch-list)]
-      (let [ch (get ch-list i)]
-        (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
-          (if-not (vec-contains (filter (fn [x] (not (nil? x))) (flatten (map (fn [x] (conj (let [v (:input x)] (if v (keys @v) [])) (let [v (:output x)] (if v @v nil)))) (vals @(:task-list unit)))))
-                                ch)
-            (do
-              (println "removing channel " i)
-            (remove-channel unit ch))))))))
+;(defn garbage-collect 
+;  "Garbage collects channels.  If no task listens to or publishes to a channel, remove it from memory"
+;  [unit]
+;  (let [ch-list @(:total-channel-list unit)]
+;    (doseq [i (keys ch-list)]
+;      (let [ch (get ch-list i)]
+;        (if-not (or (= i :network-in-channel) (= i :network-out-channel) (= i :kernel) (= i :input-channel))
+;          (if-not (vec-contains (filter (fn [x] (not (nil? x))) (flatten (map (fn [x] (conj (let [v (:input x)] (if v (keys @v) [])) (let [v (:output x)] (if v @v nil)))) (vals @(:task-list unit)))))
+;                                ch)
+;            (do
+;              (println "removing channel " i)
+;            (remove-channel unit ch))))))))
   
 
 (defprotocol ICPUChannel
@@ -487,7 +489,7 @@
   
   (subscribe-and-wait [_ channel] "Subscribes to the channel and waits for the subscription to be initialized.  Channel must be a lamina channel!")
   
-  (construct [_ gc-fn] "Initializes the Cyber-Physical Unit"))
+  (construct [_]));gc-fn] "Initializes the Cyber-Physical Unit"))
 
 (defprotocol ICPUTaskUtil
   
@@ -568,7 +570,7 @@
 
   
  (construct
-   [_ gc-fn]
+   [_]; gc-fn]
      
    ;Inbound and outbound network channels
    (internal-channel _ :network-out-channel)
@@ -577,10 +579,10 @@
     
    ;GARBAGE COLLECTOR.  Will ignore certain channels like the kernel, networking, and input.
     
-   (task _   
-         {:name "channel-gc"
-          :function (fn [this] (locking gc-fn (gc-fn _)))
-          :update-time 10000})
+;   (task _   
+;         {:name "channel-gc"
+;          :function (fn [this] (locking gc-fn (gc-fn _)))
+;          :update-time 10000})
     
    ;Callback for the CPU's "instructions".  Performs a different action based on the code passed to the CPU in the format
    ; [INSTRUCTION-CODE ~~~OTHER-DATA~~~~]   
@@ -677,33 +679,33 @@
                                                         (kill-task _ (:name this))
                                                         (kill-task _ (:name broadcast-task))))})))                                                 
                                             
-                              (= code LOCK-GC)
-                              ;LOCK-GC expects [OP-CODE]
-                              
-                              ;This instruction locks the GC so that it won't remove channels that you're trying to create!  Can be tricky to use...be careful!
-                              ;So, you should stick with the wait-for-lock and unlock functions provided :)
-                                            
-                              (let [p (promise)]
-                                (on-pool kernel-exec
-                                         (locking gc-fn                                      
-                                                                         
-                                           ;Make a task for removing the lock!
-                                           (task _ {:name "gc-lock"
-                                                    :function (fn [this input-channel]
-                                                                (let [code (first input-channel)]
-                                                                   (when (= code UNLOCK-GC)
+;                              (= code LOCK-GC)
+;                              ;LOCK-GC expects [OP-CODE]
+;                              
+;                              ;This instruction locks the GC so that it won't remove channels that you're trying to create!  Can be tricky to use...be careful!
+;                              ;So, you should stick with the wait-for-lock and unlock functions provided :)
+;                                            
+;                              (let [p (promise)]
+;                                (on-pool kernel-exec
+;                                         (locking gc-fn                                      
+;                                                                         
+;                                           ;Make a task for removing the lock!
+;                                           (task _ {:name "gc-lock"
+;                                                    :function (fn [this input-channel]
+;                                                                (let [code (first input-channel)]
+;                                                                   (when (= code UNLOCK-GC)
 ;                                                                     (println "Unlock time!")
-                                                                     (kill-task _ (:name this))
-                                                                     (deliver p true))))
-                                                    :without-locking true})
-                                           
-                                           ;When locked, return the result!
-                                                                                             
-                                           (lamina/enqueue (last payload) :locked)  
-                                           
-                                           ;Lock until the unlock instruction is sent...
-                                           
-                                           @p)))                                      
+;                                                                     (kill-task _ (:name this))
+;                                                                     (deliver p true))))
+;                                                    :without-locking true})
+;                                           
+;                                           ;When locked, return the result!
+;                                                                                             
+;                                           (lamina/enqueue (last payload) :locked)  
+;                                           
+;                                           ;Lock until the unlock instruction is sent...
+;                                           
+;                                           @p)))                                      
                                             
                              :default
                                            
@@ -787,24 +789,24 @@
     (t/obliterate (get @task-list task-name))
     (swap! task-list dissoc task-name)))
 
-(defn wait-for-lock
-  "Waits for a lock on a CPU to be established"
-  [unit]
-  (lamina/wait-for-message (instruction unit [LOCK-GC])))
+;(defn wait-for-lock
+;  "Waits for a lock on a CPU to be established"
+;  [unit]
+;  (lamina/wait-for-message (instruction unit [LOCK-GC])))
 
-(defn unlock
-  "Unlocks a CPU"
-  [unit]
-  (instruction unit [UNLOCK-GC]))
+;(defn unlock
+;  "Unlocks a CPU"
+;  [unit]
+;  (instruction unit [UNLOCK-GC]))
 
-(defmacro with-gc-locking
-  "Locks a CPU, executes some code, and unlocks the CPU"
-  [unit & code]
-  `(do
-     (wait-for-lock ~unit)
-     (let [ret# (do ~@code)]
-       (unlock ~unit)
-       ret#)))
+;(defmacro with-gc-locking
+;  "Locks a CPU, executes some code, and unlocks the CPU"
+;  [unit & code]
+;  `(do
+;     (wait-for-lock ~unit)
+;     (let [ret# (do ~@code)]
+;       (unlock ~unit)
+;       ret#)))
 
 (defn cyber-physical-unit
   "Creates a new CPU with the given IP!"
@@ -812,7 +814,7 @@
   ;Construct a cpu.  Give it a bunch of maps to store stuff in, an IP, a server ip (atomic so that it can change), a variable to determine if the CPU is still
   ;"alive", and an anonymous function containing the garbage collector!
   
-  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true) (atom true)) (fn [x] (garbage-collect x)))]
+  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true) (atom true)))] ; (fn [x] (garbage-collect x)))]
     (with-meta new-cpu
       {:type ::cyber-physical-unit
       ::source (fn [] @(:task-list new-cpu))})))
@@ -829,11 +831,11 @@
    @timeout the amount of time to wait for the ping to come back. Default 1000
    @lock Whether the function call should lock the garbage collector. Default true"
   
-  [unit ip & {:keys [timeout lock] :or {timeout 1000 lock true}}]
+  [unit ip & {:keys [timeout ] :or {timeout 1000}}];lock] :or {timeout 1000 lock true}}]
   
   ;If supposed to wait for a lock...
-  (if lock
-    (wait-for-lock unit))
+;  (if lock
+;    (wait-for-lock unit))
 
 
     (let [
@@ -849,8 +851,8 @@
       ;Subscribe to a channel and wait for it to be initialized!  This action is important because there will only be ONE message over this channel
       (if (= nil (subscribe-and-wait unit ch))
         (do
-          (if lock
-             (unlock unit))
+;          (if lock
+;             (unlock unit))
           nil)
         (do
       ;Ping the CPU!
@@ -861,8 +863,8 @@
            (remove-channel unit ch)
         
            ;If supposed to lock...
-           (if lock
-             (unlock unit))
+;           (if lock
+;             (unlock unit))
              
            ;If a result was actually obtained, return the time passed.  Otherwise, return the result (which is nil)
              (if result 
@@ -870,11 +872,11 @@
                (println "deref timed out from ping-cpu returning nil")))))))
 
 (defn ping-channel 
-  [unit channel-name & {:keys [timeout lock] :or {timeout 1000 lock true}}]
+  [unit channel-name & {:keys [timeout] :or {timeout 1000}}];lock] :or {timeout 1000 lock true}}]
   
   ;If supposed to lock...
-  (if lock
-    (wait-for-lock unit))
+;  (if lock
+;    (wait-for-lock unit))
   
     (let [
           
@@ -899,8 +901,8 @@
         (remove-channel unit ch)
         
         ;If supposed to lock...
-        (if lock
-          (unlock unit))
+;        (if lock
+;          (unlock unit))
       
         ;Return the result!
         result)))
