@@ -744,7 +744,7 @@
                (println "deref timed out from ping-cpu returning nil")))))))
 
 (defn ping-channel
-  [unit channel-name & {:keys [timeout] :or {timeout 1000}}];lock] :or {timeout 1000 lock true}}]
+  [unit channel-name & {:keys [timeout] :or {timeout 1000}}]
 
     (let [
 
@@ -752,10 +752,7 @@
           ch-name (str (gensym (str "pc_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))
 
           ;Make the temp. channel!
-          ch (temporary-channel unit (keyword ch-name))
-
-          ;Get the time now!
-          start-time (util/time-now)]
+          ch (temporary-channel unit (keyword ch-name))]
 
       ;Subscribe and wait for the channel to be initialized on the network because we're only getting ONE message
       (subscribe-and-wait unit ch)
