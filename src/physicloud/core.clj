@@ -82,7 +82,7 @@
 
   (handler
     [this msg]
-    (println "message received by the client handler:  " msg)
+    ;(println "message received by the client handler:  " msg)
     (let [
 
         parsed-msg (clojure.string/split msg #"\|")
@@ -670,7 +670,7 @@
                                ;expects [op-code ch-name]
                                 (let [ip ip-address
                                       tasks (filter (fn [task-name]
-                                                      (and (not= task-name "stop-client-task")
+                                                      (and(not= task-name "stop-client-task")
                                                           (not= task-name "stop-server-task")
                                                           (not= task-name "udp-broadcast")
                                                           (not= task-name "stop-udp-broadcast"))) (map (fn [task] (name (first task))) @task-list))
@@ -680,8 +680,10 @@
                                       map-to-send {:ip ip
                                                    :tasks tasks
                                                    :processors processors
-                                                   :os os
-                                                   :produces produces}]
+                                                   :produces produces
+                                                   :os {:name (System/getProperty "os.name")
+                                                        :version (System/getProperty "os.version")
+                                                        :architecture (System/getProperty "os.arch")}}]
                                   (send-net _ (util/package (first payload) map-to-send)))
                                
                                
@@ -753,8 +755,10 @@
            ;give neighbors a chance to respond
            (Thread/sleep listen-time)
            (remove-channel unit ch)))
-       @status-reports))
-
+       (println (first @status-reports))
+       (println (second @status-reports))
+       ;@status-reports))
+       ))
 (defn ping-cpu
 
   "Pings a given CPU, will return the time for one-way message transmission
