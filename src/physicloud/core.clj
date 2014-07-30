@@ -33,6 +33,7 @@
 (def STOP-UDP-CLIENT 7)
 (def UDP-BROADCAST 8)
 (def DECLARE-SERVER-UP 9)
+(def REQUEST-STATUS 10)
 
 ; Support functions.
 (declare temporary-channel)
@@ -81,7 +82,7 @@
 
   (handler
     [this msg]
-    ;(println "message received by the client handler:  " msg)
+    (println "message received by the client handler:  " msg)
     (let [
 
         parsed-msg (clojure.string/split msg #"\|")
@@ -664,6 +665,26 @@
                                 (when ((second payload) @total-channel-list)
                                   (send-net _ (util/package (first payload) [ip-address]))))
 
+                               (= code REQUEST-STATUS)
+                               ;someone requested your status!, reply with a map of {:ip :tasks :produces :processors :os}
+                               ;expects [op-code ch-name]
+                                (let [ip ip-address
+                                      tasks (filter (fn [task-name]
+                                                      (and (not= task-name "stop-client-task")
+                                                          (not= task-name "stop-server-task")
+                                                          (not= task-name "udp-broadcast")
+                                                          (not= task-name "stop-udp-broadcast"))) (map (fn [task] (name (first task))) @task-list))
+                                      processors (.availableProcessors (Runtime/getRuntime))
+                                      os "not yet implemented!"
+                                      produces (map (fn [task] (name (:produces task))) (filter :produces (map second @task-list)))
+                                      map-to-send {:ip ip
+                                                   :tasks tasks
+                                                   :processors processors
+                                                   :os os
+                                                   :produces produces}]
+                                  (send-net _ (util/package (first payload) map-to-send)))
+                               
+                               
                                 ;The CPU is being pinged!  Respond with the time it got the ping...
 
                                 ;PING expects [OP-CODE name-of-network-channel]
@@ -704,6 +725,35 @@
 
 (defmethod print-method ::cyber-physical-unit [o ^Writer w]
   (print-method ((::source (meta o))) w))
+
+(defn request-status 
+  "gets the status data of all the neighbors that are currently connected to the server. 
+   Every message received in the channel should be a map with the following keys:
+   {:ip ...          ;their IP address
+    :tasks ...       ;their current task list   
+    :produces ....   ;datatypes of everything it produces
+    :processors .... ;num available processors 
+    :os ...}         ;the operating system"
+  [unit & {:keys [listen-time] :or {listen-time 1000}}]
+  
+    (let [
+           ;Establish a temporary channel name.
+           ch-name (str (gensym (str "r_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))    
+           ch (temporary-channel unit (keyword ch-name)) 
+           status-reports (atom #{}) 
+
+           ;Collect all the data from the temporary channel in the atomic map!
+           cb (fn [x] (swap! status-reports conj x))]
+      
+       (if (subscribe-and-wait unit ch) 
+         (do
+           (lamina/receive-all ch cb)
+           (send-net unit (util/package "kernel" [REQUEST-STATUS ch-name]))
+
+           ;give neighbors a chance to respond
+           (Thread/sleep listen-time)
+           (remove-channel unit ch)))
+       @status-reports))
 
 (defn ping-cpu
 
