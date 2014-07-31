@@ -11,4 +11,5 @@
                  [gloss "0.2.2"]
                  [criterium "0.4.3"]
                  [org.clojure/data.csv "0.1.2"]
-                 [clojure-lanterna "0.9.4"]])
+                 [clojure-lanterna "0.9.4"]
+                 [seesaw "1.4.4"]])

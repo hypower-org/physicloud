@@ -14,13 +14,13 @@
 (core/into-physicloud test-cpu)
 
 
-(core/task test-cpu {:name "producer"
-                      :function (fn [this] (producerfn))
-                      :produces "awesome-data-map1"
-                      :update-time 2000
-                      })
-
-(Thread/sleep 3000)
+;(core/task test-cpu {:name "producer"
+;                      :function (fn [this] (producerfn))
+;                      :produces "awesome-data-map1"
+;                      :update-time 2000
+;                      })
+;
+;(Thread/sleep 3000)
 
 (core/task test-cpu {:name "consumer1"
                      :function (fn [this awesome-data-map1]

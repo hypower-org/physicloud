@@ -755,10 +755,7 @@
            ;give neighbors a chance to respond
            (Thread/sleep listen-time)
            (remove-channel unit ch)))
-       (println (first @status-reports))
-       (println (second @status-reports))
-       ;@status-reports))
-       ))
+       @status-reports))
 (defn ping-cpu
 
   "Pings a given CPU, will return the time for one-way message transmission
