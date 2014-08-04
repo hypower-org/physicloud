@@ -88,7 +88,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defn udoo []
+(defn udoo-one []
 	(core/task test-cpu {:name "map-of-maps-producer"
 	                      :function (fn [this] (println "map-of-maps producer producing") {:one {:one "map1"} :two {:two "map2"} :three {:three "map3"}})
 	                      :produces "awesome-map-of-maps"
@@ -122,7 +122,61 @@
 	                                 (println lame-data ))
 	                     })
 )
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
+(defn udoo-two []
+	(core/task test-cpu {:name "information-producer"
+	                      :function (fn [this] (println "information producer producing") "information from udoo2")
+	                      :produces "awesome-information"
+	                      :update-time 2000
+	                      })
+	
+	(core/task test-cpu {:name "sensor-data-producer"
+	                      :function (fn [this] (println "sensor data producer producing") ["sensor data from udoo:" {:visual (rand 200) :encoder (rand 55)} ])
+	                      :produces "awesome-sensor-data"
+	                      :update-time 2000
+	                      })
+	
+	(core/task test-cpu {:name "location-data-producer"
+	                      :function (fn [this] (println "location producer producing") (str "location data: in grid: " (rand 5) "."))
+	                      :produces "location-data"
+	                      :update-time 2000
+	                      })
+	
+	(Thread/sleep 3000)
+	
+	(core/task test-cpu {:name "ras-pi-consumer"
+	                     :function (fn [this awesome-ras-pi-data]
+	                                 (println awesome-ras-pi-data ))
+	                     })
+	(core/task test-cpu {:name "map-of-maps-consumer"
+	                     :function (fn [this awesome-map-of-maps]
+	                                 (println awesome-map-of-maps ))
+	                     })
+	(core/task test-cpu {:name "vector-of-vectors-consumer"
+	                     :function (fn [this awesome-vector-of-vectors]
+	                                 (println awesome-vector-of-vectors ))
+	                     })
+)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn ras-pi []
+	(core/task test-cpu {:name "ras-pi-producer"
+	                      :function (fn [this] (println "ras-pi producer producing") "information from ras-pi")
+	                      :produces "awesome-ras-pi-data"
+	                      :update-time 2000
+	                      })
+	(Thread/sleep 3000)
+	
+	(core/task test-cpu {:name "information-consumer"
+	                     :function (fn [this awesome-information]
+	                                 (println awesome-information ))
+	                     })
+	(core/task test-cpu {:name "sensor-data-consumer"
+	                     :function (fn [this awesome-sensor-data]
+	                                 (println awesome-sensor-data))
+	                     })
+)
 
 )
  

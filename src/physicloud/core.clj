@@ -46,7 +46,7 @@
 (declare subscribe-and-wait)
 (declare into-physicloud)
 
-(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  (* 2 (.availableProcessors (Runtime/getRuntime)))))
+(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
 
 (defmacro on-pool
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
@@ -307,7 +307,6 @@
 
   [unit {:keys [function consumes produces update-time name on-established additional init]}]
   (let [args# (second function)]
-
     `(task-builder ~unit {:function (fn [{:keys ~args#}] (if (and ~@args#) (~function ~@args#)))
                           :consumes ~(set (doall (map keyword (rest args#))))
                           :produces ~produces

@@ -14,16 +14,21 @@
 (core/into-physicloud test-cpu)
 
 
-;(core/task test-cpu {:name "producer"
-;                      :function (fn [this] (producerfn))
+;(core/task test-cpu {:name "producerr"
+;                      :function (fn [this] (load-string "(println (+ 2 2))"))
 ;                      :produces "awesome-data-map1"
 ;                      :update-time 2000
 ;                      })
 ;
-;(Thread/sleep 3000)
+(Thread/sleep 3000)
 
 (core/task test-cpu {:name "consumer1"
-                     :function (fn [this awesome-data-map1]
+                     :function (fn [this]
                                  (println awesome-data-map1))
                      })
  )
+;(core/task test-cpu {:name "producer"
+;                      :function (fn [this] (println "producer444 producciinngg") ["im a vec"])
+;                      :produces "awesome-data-map1"
+;                      :update-time 2000
+;                      })
