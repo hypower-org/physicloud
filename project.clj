@@ -1,4 +1,4 @@
-(defproject PhysiCloud "1.0.0"
+(defproject PhysiCloud "gpio-demo"
   :description "PhysiCloud: A software platform to facilitate the programming of cyber-physical systems."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
@@ -15,4 +15,4 @@
                  ;[seesaw "1.4.4"]
                  ]
   :main physicloud-tests.gpio-demo
-  :aot [physicloud-test.gpio-demo])
+  :aot [physicloud-tests.gpio-demo])

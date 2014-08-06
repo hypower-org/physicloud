@@ -19,13 +19,16 @@
 ;                      :produces "awesome-data-map1"
 ;                      :update-time 2000
 ;                      })
-;
-(Thread/sleep 3000)
-
-(core/task test-cpu {:name "consumer1"
-                     :function (fn [this]
-                                 (println awesome-data-map1))
-                     })
+(core/task test-cpu {:name "ras-pi-3-producer"
+                   :function (fn [this] (println "producer producing") {:producer 42})
+                   :produces "ras-pi-3-data"
+                   :update-time 2000})
+  (Thread/sleep 3000)
+  (core/task test-cpu {:name "ras-pi-3-consumer"
+                       :function (fn [this ras-pi-2-data]
+                                   (println ras-pi-2-data)
+                                  ;(core/toggle-gpio 18)
+                                   )})
  )
 ;(core/task test-cpu {:name "producer"
 ;                      :function (fn [this] (println "producer444 producciinngg") ["im a vec"])
