@@ -32,6 +32,12 @@
 (defn ui []
   (native!)
 
+  (declare north-fp)
+  (declare set-inspect-view)
+  (declare set-create-task-view)
+  (declare set-kill-task-view)
+  (declare set-ping-cpu-view)
+  (declare this-fn)
   (def system-specs (atom (core/request-status test-cpu))) 
   
   (defn update-system-specs []
@@ -71,12 +77,7 @@
   (def details-of-spec-lb (listbox))
   (def ping-time (atom "pinging...."))
   
-  (declare north-fp)
-  (declare set-inspect-view)
-  (declare set-create-task-view)
-  (declare set-kill-task-view)
-  (declare set-ping-cpu-view)
-  (declare this-fn)
+
   
   
   (listen cpu-neighbors-lb :selection

@@ -53,6 +53,12 @@
   [^ScheduledThreadPoolExecutor pool & code]
   `(.execute ~pool (fn [] (try ~@code (catch Exception e# (println (str "caught exception: \"" (.getMessage e#) (.printStackTrace e#))))))))
 
+(defn toggle-gpio [pin-num]
+  (let [file (str "/sys/class/gpio/gpio" (str pin-num) "/value")]
+    (spit file "1")
+    (Thread/sleep 250)
+    (spit file "0")))
+
 ;Server messages are delmited by |
 
 (defprotocol IClientHandler
@@ -374,6 +380,7 @@
          (if (:consumes new-task)
           (on-pool kernel-exec
                    (loop []
+                     (spit "/sys/class/gpio/gpio24/value" "1")
                      ;For any types the task consumes, try to generate channels for them!
                      (doseq [i (:consumes new-task)]
                        (genchan unit i :listen-time listen-time))
@@ -384,6 +391,7 @@
                          (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
                        ;Set up the listening for a task!
                        (do
+                         (spit "/sys/class/gpio/gpio24/value" "0")
                          (doseq [c (:consumes new-task)]
                            (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
                          (if (= type "time") ;only time tasks need to be scheduled
@@ -571,6 +579,10 @@
                                    listener-cb (fn udp-client-actions
                                                  [udp-packet]
                                                  (println udp-packet)
+                                                 (let [file "/sys/class/gpio/gpio23/value"]
+                                                   (spit file "1")
+																									 (Thread/sleep 50)
+																									 (spit file "0"))
                                                  (let [^String code (first (clojure.string/split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
                                                    (cond
                                                      (= code "Server-up!")(do (reset! server-ip sender) (reset! wait-for-server? false))
@@ -848,6 +860,7 @@
   [unit  & {:keys [on-disconnect] :or {on-disconnect nil}}]
   (on-pool kernel-exec
            (loop [initial-establish? true]
+             (spit "/sys/class/gpio/gpio4/value" "0")
 
            ;Make the UDP client and wait for it to be initialized!
              (if initial-establish?
@@ -891,6 +904,7 @@
                    (do
                      (println "No server found. Establishing server...")
                      (instruction unit [START-SERVER 8998])
+                     (spit "/sys/class/gpio/gpio4/value" "1")
                      (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
                      (if-not initial-establish?
                        (rebuild-network-tasks unit)))
@@ -910,6 +924,7 @@
 
             (loop []
               (Thread/sleep 1000)
+              (toggle-gpio 25)
                (if (ping-cpu unit (:ip-address unit))
                  (recur)
 
