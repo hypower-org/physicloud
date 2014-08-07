@@ -7,20 +7,20 @@
 (defn -main [ip who]  ;; pass the jar an ip and either "ras-pi-1", "ras-pi-2", or "ras-pi-3"
 
 ;;make gpio pins 18, 23, 24, and 25 writable outputs
-(spit "/sys/class/gpio/export" "4") ;;for showing who the server is
-(spit "/sys/class/gpio/gpio4/direction" "out")
-
-(spit "/sys/class/gpio/export" "18") ;; for showing when data is consumed
-(spit "/sys/class/gpio/gpio18/direction" "out")
-
-(spit "/sys/class/gpio/export" "23") ;; for showing udp chatter
-(spit "/sys/class/gpio/gpio23/direction" "out")
-
-(spit "/sys/class/gpio/export" "24")  ;; for showing dependency search
-(spit "/sys/class/gpio/gpio24/direction" "out")
-
-(spit "/sys/class/gpio/export" "25")  ;;for showing heartbeat
-(spit "/sys/class/gpio/gpio25/direction" "out")
+;(spit "/sys/class/gpio/export" "4") ;;for showing who the server is
+;(spit "/sys/class/gpio/gpio4/direction" "out")
+;
+;(spit "/sys/class/gpio/export" "18") ;; for showing when data is consumed
+;(spit "/sys/class/gpio/gpio18/direction" "out")
+;
+;(spit "/sys/class/gpio/export" "23") ;; for showing udp chatter
+;(spit "/sys/class/gpio/gpio23/direction" "out")
+;
+;(spit "/sys/class/gpio/export" "24")  ;; for showing dependency search
+;(spit "/sys/class/gpio/gpio24/direction" "out")
+;
+;(spit "/sys/class/gpio/export" "25")  ;;for showing heartbeat
+;(spit "/sys/class/gpio/gpio25/direction" "out")
 
 (def test-cpu (core/cyber-physical-unit ip))
 (core/into-physicloud test-cpu)
@@ -59,7 +59,8 @@
   (core/task test-cpu {:name "ras-pi-3-consumer"
                        :function (fn [this ras-pi-2-data]
                                    (println ras-pi-2-data)
-                                   (core/toggle-gpio 18))})))
+                                  ; (core/toggle-gpio 18)
+                                   )})))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
  )
