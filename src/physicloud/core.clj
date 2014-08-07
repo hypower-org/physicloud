@@ -15,7 +15,6 @@
            [java.io PrintWriter]
            java.io.Writer))
 
-
 (set! *warn-on-reflection* true)
 
 ;Networking message constants!
@@ -104,7 +103,8 @@
         (= code "ping")
 
         (do
-          (let [kernel-list @(:kernel @channel-list) client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
+          (let [kernel-list @(:kernel @channel-list) 
+                client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
             (when client-to-ping
               (doseq [i (keys kernel-list)]
                 (if (= (get kernel-list i) client-to-ping)
@@ -124,8 +124,8 @@
 
         :else
         (do
+          
           (when-let [c-list (get @channel-list (keyword code))]
-            ;(write-to-terminal code " -> " payload " -> " @(get @channel-list (keyword code)))
             (doseq [i (keys @c-list)]
               (when (= (lamina/enqueue i msg) :lamina/closed!)
                 (swap! c-list dissoc i)
@@ -429,7 +429,7 @@
 
   (subscribe-and-wait [_ channel] "Subscribes to the channel and waits for the subscription to be initialized.  Channel must be a lamina channel!")
 
-  (construct [_]));gc-fn] "Initializes the Cyber-Physical Unit"))
+  (construct [_] "initializes cyber-physical-unit"))
 
 (defprotocol ICPUTaskUtil
 
