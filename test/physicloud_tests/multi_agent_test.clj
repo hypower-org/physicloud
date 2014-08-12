@@ -7,7 +7,7 @@
 ; Create a CPU at the provided IP address.
 (defn -main []
 ;; edit this for a specific cpu's ip
-(def test-cpu (core/cyber-physical-unit (:ip (load-string (slurp "/home/ug-research/git/physicloud/physicloud-config.clj")))))
+(def test-cpu (core/cyber-physical-unit (:ip (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj")))))
 
 
 (core/into-physicloud test-cpu)
