@@ -5,7 +5,7 @@
   (:gen-class))
 
 
-(defn -main [who]  ;; pass the jar an ip and either "ras-pi-1", "ras-pi-2", or "ras-pi-3"
+(defn -main [who]  ;; pass the jar either "ras-pi-1", "ras-pi-2", or "ras-pi-3"
 
 ;;make gpio pins 18, 23, 24, and 25 writable outputs
 ;(spit "/sys/class/gpio/export" "4") ;;for showing who the server is
@@ -66,7 +66,7 @@
                                   ; (core/toggle-gpio 18)
                                    )})))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(if (= "laptop" (:device (load-string (slurp "/home/ug-research/git/physicloud/physicloud-config.clj"))))
+(if (= "laptop" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
   (do
   (native!)
 
@@ -91,10 +91,10 @@
                 :menubar 
                 (menubar :items 
                   [(menu :text "File" :items [update-action server-action])
-                   
-                 ;  (menu :text "Create task" :listen [:action (fn [x] (set-create-task-view))])
-                 ;  (menu :text "Kill Task" :listen [:action (fn [x] (set-kill-task-view))])
-                 ;  (menu :text "Ping CPU" :listen [:action (fn [x] (set-ping-cpu-view))])
+                 ; menu still to be implemented
+;                   (menu :text "Create task" :listen [:action (fn [x] (set-create-task-view))])
+;                   (menu :text "Kill Task" :listen [:action (fn [x] (set-kill-task-view))])
+;                   (menu :text "Ping CPU" :listen [:action (fn [x] (set-ping-cpu-view))])
                    
                    ])))
   
@@ -114,10 +114,7 @@
   (def cpu-specs-lb (listbox))
   (def details-of-spec-lb (listbox))
   (def ping-time (atom "pinging...."))
-  
 
-  
-  
   (listen cpu-neighbors-lb :selection
           (fn [e] 
             (when-let [ip (selection e)]
@@ -133,10 +130,11 @@
                                                    (vector ((keyword spec) (get-specs-of-ip @selected-ip))))))))
   
  (def north-fp (flow-panel :items[(label :text "Select option:")
-							                                                                  (toggle :id :inspect :text "Inspect"  :listen [:action (fn [x] (set-inspect-view))])
-							                                                                  (toggle :id :create-task :text "Create Task" :listen [:action (fn [x] (set-create-task-view))])
-							                                                                  (toggle :id :kill-task :text "Kill Task" :listen [:action (fn [x] (set-kill-task-view))])
-							                                                                  (toggle :id :ping-cpu :text "Ping CPU" :listen [:action (fn [x] (set-ping-cpu-view))])])  )                                            
+	                                (toggle :id :inspect :text "Inspect"  :listen [:action (fn [x] (set-inspect-view))])
+	                                (toggle :id :create-task :text "Create Task" :listen [:action (fn [x] (set-create-task-view))])
+	                                (toggle :id :kill-task :text "Kill Task" :listen [:action (fn [x] (set-kill-task-view))])
+	                                (toggle :id :ping-cpu :text "Ping CPU" :listen [:action (fn [x] (set-ping-cpu-view))])])  )                                            
+
  (defn set-inspect-view [] (display (border-panel
                                         :north north-fp
                                         :center (scrollable cpu-specs-lb)
@@ -165,10 +163,12 @@
                                            task-produces-box
                                            task-update-time-box
                                            task-function-area
-                                           (button :text "instantiate" :bounds [220, 240, 160, 30] :listen [:action 
-                                                                                                            (fn [x]
-                                                                                                              (create-new-task(fn [] 
-                                                                                                                                (load-string (text task-function-area)))))])]))
+                                           (button :text "instantiate" 
+                                                   :bounds [220, 240, 160, 30] 
+                                                   :listen [:action 
+                                                            (fn [x]
+                                                              (create-new-task(fn [] 
+                                                                                (load-string (text task-function-area)))))])]))
   (defn set-create-task-view [] (display (border-panel
 	                                          :north north-fp
 	                                          :center create-task-xyz-p
@@ -182,11 +182,13 @@
 
   
 (def xyz-p (xyz-panel :items[task-killed-text 
-                             (button :text "Kill task" :bounds [200, 120, 160, 30] :listen [:action 
-                                                                                              (fn [x] 
-                                                                                                (core/kill-task test-cpu (selection cpu-tasks-lb))
-                                                                                                (config! task-killed-text :text (str "Just killed " (selection cpu-tasks-lb) " task"))
-                                                                                                (config! cpu-tasks-lb :model (:tasks (do (update-system-specs) (get-specs-of-ip (:ip-address test-cpu))))))])]))
+                             (button :text "Kill task" 
+                                     :bounds [200, 120, 160, 30] 
+                                     :listen [:action 
+                                                (fn [x] 
+                                                  (core/kill-task test-cpu (selection cpu-tasks-lb))
+                                                  (config! task-killed-text :text (str "Just killed " (selection cpu-tasks-lb) " task"))
+                                                  (config! cpu-tasks-lb :model (:tasks (do (update-system-specs) (get-specs-of-ip (:ip-address test-cpu))))))])]))
 
   (defn set-kill-task-view [] 
     (config! cpu-tasks-lb :model (:tasks (do (update-system-specs) (get-specs-of-ip (:ip-address test-cpu)))))
@@ -207,8 +209,7 @@
               (set-ping-cpu-view)))) 
       (display (border-panel
 	                :north north-fp
-	                :center (flow-panel :items [
-                                              (label :text (str "Pinging "@selected-ip" took: " @ping-time " milliseconds."))])
+	                :center (flow-panel :items [(label :text (str "Pinging "@selected-ip" took: " @ping-time " milliseconds."))])
                   :west (scrollable ips)
 	                :vgap 5
 	                :hgap 5))))
