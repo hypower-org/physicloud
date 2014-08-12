@@ -5,9 +5,9 @@
             [clojure.string :only (join split)]))
 
 
-(defn -main [ip]
+(defn -main []
 	
-(def test-cpu (core/cyber-physical-unit ip))
+(def test-cpu (core/cyber-physical-unit (:ip (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj")))))
 
 (defn producerfn []
   (println "Producer producing...")

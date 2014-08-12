@@ -3,9 +3,9 @@
             [physicloud.task :as t]))
 
  ;This test demonstrates the creation of a basic Cyber Physical Unit in PhysiCloud.
-(defn -main [ip]
+(defn -main []
 ; Create a CPU at the provided IP address.
-(def test-cpu (core/cyber-physical-unit ip))
+(def test-cpu (core/cyber-physical-unit (:ip (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj")))))
 
 (defn producerfn []
   (println "Producer producing...")
