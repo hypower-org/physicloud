@@ -5,9 +5,9 @@
             [clojure.string :only (join split)]))
 
 
-(defn -main [ip]
+(defn -main []
 	
-(def test-cpu (core/cyber-physical-unit ip))
+(def test-cpu (core/cyber-physical-unit (:ip (load-string (slurp "/home/ug-research/git/physicloud/physicloud-config.clj")))))
 
 (defn producerfn []
   (println "Producer producing...")
@@ -30,6 +30,14 @@
 
 
 (defn ui []
+
+  (declare north-fp)
+  (declare set-inspect-view)
+  (declare set-create-task-view)
+  (declare set-kill-task-view)
+  (declare set-ping-cpu-view)
+  (declare this-fn)
+  
   (native!)
 
   (def system-specs (atom (core/request-status test-cpu))) 

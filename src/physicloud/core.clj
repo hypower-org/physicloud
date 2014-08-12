@@ -44,8 +44,10 @@
 (declare parse-item)
 (declare subscribe-and-wait)
 (declare into-physicloud)
+(declare ping-cpu)
+(declare rebuild-network-tasks)
 
-(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
+;(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
 
 (defmacro on-pool
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
@@ -81,7 +83,6 @@
 
   (handler
     [this msg]
-    ;(println "message received by the client handler:  " msg)
     (let [
 
         parsed-msg (clojure.string/split msg #"\|")
@@ -124,7 +125,6 @@
 
         :else
         (do
-          
           (when-let [c-list (get @channel-list (keyword code))]
             (doseq [i (keys @c-list)]
               (when (= (lamina/enqueue i msg) :lamina/closed!)
@@ -154,10 +154,10 @@
 (defn tcp-server
   [port]
   (let [server (->TCPserver (atom {}) (atom "initializing..."))]
-
     (reset! (:kill-function server) (aleph/start-tcp-server (fn [channel client-info] (tcp-client-handler server channel client-info))
                                                             {:port port
                                                              :frame (gloss/string :utf-8 :delimiters ["\r\n"])}))
+
     server))
 
 (defn tcp-client-connect
@@ -210,7 +210,6 @@
         ;Put all the data from the networking out channel in the given CPU into the client channel!
         (lamina/siphon (:network-out-channel @(:total-channel-list unit)) client)
 
-        ;Take all of the data from the client and 'put' it into a core.async channel!
        (lamina/siphon client (:network-in-channel @(:total-channel-list unit)))
 
         client))))
@@ -284,6 +283,18 @@
                     (println "making networked channel for data: " data)
                     (subscribe-and-wait unit ch)
                     ch)]
+           (swap! (:producer-ip-list unit) conj chosen)
+           
+           (future ;;spawn thread for periodically checking the existence of new producer
+             (loop [] 
+               (if (ping-cpu unit chosen)
+                 (do 
+                   (Thread/sleep 5000) 
+                   (recur))
+                 (do
+                   (println "Lost connection to producer. rebuilding network tasks")
+                   (rebuild-network-tasks unit)))))
+           
            (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
            ch))
         (do
@@ -372,7 +383,7 @@
 
          ;If the task consumes something, do it in the background
          (if (:consumes new-task)
-          (on-pool kernel-exec
+          (future
                    (loop []
                      ;For any types the task consumes, try to generate channels for them!
                      (doseq [i (:consumes new-task)]
@@ -435,7 +446,7 @@
 
   (kill-task [_ task] "Removes a given task from memory and stops all of its functionality."))
 
-(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive wait-for-server? ]
+(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list producer-ip-list ^String ip-address server-ip alive wait-for-server? ]
 
  ICPUChannel
 
@@ -590,7 +601,8 @@
                                                                              (Thread/sleep 250)
                                                                              (if (> i 0)
                                                                                (recur (dec i))
-                                                                               (do (Thread/sleep 500) ; allow all messages to be recieved before returning information
+                                                                               (do 
+                                                                                 (Thread/sleep 500) ; allow all messages to be received before returning information
                                                                                  (lamina/enqueue (second input-channel) @data))))))
                                                                          (when (= (first input-channel) DECLARE-SERVER-UP)
                                                                            (let [broadcast-ip (clojure.string/join "." (conj (subvec (clojure.string/split ip-address #"\.") 0 3) "255"))]
@@ -627,8 +639,8 @@
                               (cond
 
                                 (= code ip-address)
-
                                 ;This is a temporary solution to this problem.
+                                ;This task siphons data across network to a consumer.
                                 (do
                                   (println "Publishing data across network:  "(str "siphon -> " (first payload) " -> " (second payload)))
                                   (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
@@ -695,14 +707,13 @@
                                 (send-net _ (util/package (first payload) (util/time-now))))))))
 
 
-    ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the
+    ;Used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
     (lamina/receive-all (internal-channel _ :network-in-channel)
       (fn [msg]
         (let [parsed-msg (split msg #"\|")
               data-map (read-string (second parsed-msg))]
           (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
-            ;(println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
             (lamina/enqueue ch data-map)))))
     _)
 
@@ -719,7 +730,7 @@
   ;Construct a cpu.  Give it a bunch of maps to store stuff in, an IP, a server ip (atomic so that it can change), a variable to determine if the CPU is still
   ;"alive", and an anonymous function containing the garbage collector!
 
-  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true) (atom true)))] ; (fn [x] (garbage-collect x)))]
+  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) (atom []) ip (atom "NA") (atom true) (atom true)))] ; (fn [x] (garbage-collect x)))]
     (with-meta new-cpu
       {:type ::cyber-physical-unit
       ::source (fn [] @(:task-list new-cpu))})))
@@ -755,6 +766,7 @@
            (Thread/sleep listen-time)
            (remove-channel unit ch)))
        @status-reports))
+
 (defn ping-cpu
 
   "Pings a given CPU, will return the time for one-way message transmission
@@ -814,7 +826,7 @@
       (let [result (deref (lamina/read-channel ch) timeout nil)]
 
         (remove-channel unit ch)
-
+          
         ;Return the result!
         result)))
 
@@ -822,7 +834,7 @@
 ;; and rebuilds the channels
 (defn rebuild-network-tasks [unit]
   (let [rebuild-fn (fn [unit data task-to-attach]
-                     (on-pool kernel-exec
+                     (future
                       (loop []
                         (let [new-ch (genchan unit data)]
                           (if new-ch
@@ -846,7 +858,7 @@
    @on-disconnect the function to be run if/when the CPU is disconnected. Default nil"
 
   [unit  & {:keys [on-disconnect] :or {on-disconnect nil}}]
-  (on-pool kernel-exec
+  (future
            (loop [initial-establish? true]
 
            ;Make the UDP client and wait for it to be initialized!
