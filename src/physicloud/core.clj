@@ -15,7 +15,6 @@
            [java.io PrintWriter]
            java.io.Writer))
 
-
 (set! *warn-on-reflection* true)
 
 ;Networking message constants!
@@ -45,19 +44,28 @@
 (declare parse-item)
 (declare subscribe-and-wait)
 (declare into-physicloud)
+(declare ping-cpu)
+(declare rebuild-network-tasks)
 
-(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
+;(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
+(defn write-to-led [led val]
+  (cond 
+    (= "heartbeat" led) (spit "/sys/out/gpio/gpio2/value" val)
+    (= "udp" led) (spit "/sys/out/gpio/gpio3/value" val)
+    (= "monitor" led) (spit "/sys/out/gpio/gpio4/value" val)
+    (= "red" led) (spit "/sys/out/gpio/gpio17/value" val)
+    (= "yellow" led) (spit "/sys/out/gpio/gpio27/value" val)
+    (= "green" led) (spit "/sys/out/gpio/gpio22/value" val)
+    (= "orange" led) (spit "/sys/out/gpio/gpio10/value" val)))
+(defn read-switch[]
+  (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+  (slurp "/sys/out/gpio/gpio9/value")
+  (slurp "/home/ug-research/gpio/gpio9/value")))
 
 (defmacro on-pool
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
   [^ScheduledThreadPoolExecutor pool & code]
   `(.execute ~pool (fn [] (try ~@code (catch Exception e# (println (str "caught exception: \"" (.getMessage e#) (.printStackTrace e#))))))))
-
-(defn toggle-gpio [pin-num] nil)
-;  (let [file (str "/sys/class/gpio/gpio" (str pin-num) "/value")]
-;   (spit file "1")
-;   (Thread/sleep 250)
-;   (spit file "0")))
 
 ;Server messages are delmited by |
 
@@ -88,7 +96,6 @@
 
   (handler
     [this msg]
-    ;(println "message received by the client handler:  " msg)
     (let [
 
         parsed-msg (clojure.string/split msg #"\|")
@@ -110,7 +117,8 @@
         (= code "ping")
 
         (do
-          (let [kernel-list @(:kernel @channel-list) client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
+          (let [kernel-list @(:kernel @channel-list) 
+                client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
             (when client-to-ping
               (doseq [i (keys kernel-list)]
                 (if (= (get kernel-list i) client-to-ping)
@@ -131,7 +139,6 @@
         :else
         (do
           (when-let [c-list (get @channel-list (keyword code))]
-            ;(write-to-terminal code " -> " payload " -> " @(get @channel-list (keyword code)))
             (doseq [i (keys @c-list)]
               (when (= (lamina/enqueue i msg) :lamina/closed!)
                 (swap! c-list dissoc i)
@@ -160,10 +167,10 @@
 (defn tcp-server
   [port]
   (let [server (->TCPserver (atom {}) (atom "initializing..."))]
-
     (reset! (:kill-function server) (aleph/start-tcp-server (fn [channel client-info] (tcp-client-handler server channel client-info))
                                                             {:port port
                                                              :frame (gloss/string :utf-8 :delimiters ["\r\n"])}))
+
     server))
 
 (defn tcp-client-connect
@@ -216,7 +223,6 @@
         ;Put all the data from the networking out channel in the given CPU into the client channel!
         (lamina/siphon (:network-out-channel @(:total-channel-list unit)) client)
 
-        ;Take all of the data from the client and 'put' it into a core.async channel!
        (lamina/siphon client (:network-in-channel @(:total-channel-list unit)))
 
         client))))
@@ -290,6 +296,18 @@
                     (println "making networked channel for data: " data)
                     (subscribe-and-wait unit ch)
                     ch)]
+           (swap! (:producer-ip-list unit) conj chosen)
+           
+           (future ;;spawn thread for periodically checking the existence of new producer
+             (loop [] 
+               (if (ping-cpu unit chosen)
+                 (do 
+                   (Thread/sleep 5000) 
+                   (recur))
+                 (do
+                   (println "Lost connection to producer. rebuilding network tasks")
+                   (rebuild-network-tasks unit)))))
+           
            (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
            ch))
         (do
@@ -377,32 +395,45 @@
          (swap! task-list assoc (:name task-options) new-task)
 
          ;If the task consumes something, do it in the background
+         (println (:consumes new-task))
          (if (:consumes new-task)
-          (on-pool kernel-exec
-                   (loop []
-;                     (spit "/sys/class/gpio/gpio24/value" "1")
-                     ;For any types the task consumes, try to generate channels for them!
-                     (doseq [i (:consumes new-task)]
-                       (genchan unit i :listen-time listen-time))
-                     ;if all dependencies are satisfied, attach to channels, else recur
-                     (if
-                       (let [all-dependencies (doall (map (fn [data-dep] (contains? (merge @internal-channel-list @external-channel-list) data-dep))
-                                                          (:consumes new-task)))]
-                         (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
-                       ;Set up the listening for a task!
-                       (do
- ;                        (spit "/sys/class/gpio/gpio24/value" "0")
-                         (doseq [c (:consumes new-task)]
-                           (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
-                         (if (= type "time") ;only time tasks need to be scheduled
-                          (t/schedule-task new-task update-time 0))
-                         ;If the task is supposed to do something when it's established...
-                         (if on-established
-                           (on-established))
-                           )
-                        ;recur if the system didn't have all the task dependencies
-                       (do
-                         (recur))))))
+          (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+           (let [color (first (:consumes new-task))]
+             (cond 
+               (= color :red-ras-pi-data) (write-to-led "red" 1)
+               (= color :yellow-ras-pi-data) (write-to-led "yellow" 1)
+               (= color :green-ras-pi-data) (write-to-led "green" 1)
+               (= color :orange-ras-pi-data) (write-to-led "orange" 1))))
+          (future
+                 (loop []
+                   ;For any types the task consumes, try to generate channels for them!
+                   (doseq [i (:consumes new-task)]
+                     (genchan unit i :listen-time listen-time))
+                   ;if all dependencies are satisfied, attach to channels, else recur
+                   (if
+                     (let [all-dependencies (doall (map (fn [data-dep] (contains? (merge @internal-channel-list @external-channel-list) data-dep))
+                                                        (:consumes new-task)))]
+                       (= (count (filter (fn [x] (= x true)) all-dependencies)) (count all-dependencies)))
+                     ;Set up the listening for a task!
+                     (do
+                       (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                         (let [color (first (:consumes new-task))]
+                           (cond 
+                             (= color :red-ras-pi-data) (write-to-led "red" 0)
+                             (= color :yellow-ras-pi-data) (write-to-led "yellow" 0)
+                             (= color :green-ras-pi-data) (write-to-led "green" 0)
+                             (= color :orange-ras-pi-data) (write-to-led "orange" 0))))
+                       (doseq [c (:consumes new-task)]
+                         (t/attach new-task (c (merge @internal-channel-list @external-channel-list))))
+                       (if (= type "time") ;only time tasks need to be scheduled
+                        (t/schedule-task new-task update-time 0))
+                       ;If the task is supposed to do something when it's established...
+                       (if on-established
+                         (on-established))
+                         )
+                      ;recur if the system didn't have all the task dependencies
+                     (do
+                       (recur))))))
 
          (if (:produces new-task)
              (do
@@ -437,13 +468,13 @@
 
   (subscribe-and-wait [_ channel] "Subscribes to the channel and waits for the subscription to be initialized.  Channel must be a lamina channel!")
 
-  (construct [_]));gc-fn] "Initializes the Cyber-Physical Unit"))
+  (construct [_] "initializes cyber-physical-unit"))
 
 (defprotocol ICPUTaskUtil
 
   (kill-task [_ task] "Removes a given task from memory and stops all of its functionality."))
 
-(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list ^String ip-address server-ip alive wait-for-server? ]
+(defrecord Cyber-Physical-Unit [internal-channel-list external-channel-list total-channel-list task-list producer-ip-list ^String ip-address server-ip alive wait-for-server? ]
 
  ICPUChannel
 
@@ -578,11 +609,13 @@
 
                                    listener-cb (fn udp-client-actions
                                                  [udp-packet]
-                                                 (println udp-packet)
-;                                                 (let [file "/sys/class/gpio/gpio23/value"]
-;                                                  (spit file "1")
-;																								  (Thread/sleep 75)
-;																								  (spit file "0"))
+;                                                 (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+;                                                  (do 
+;                                                    (write-to-led "udp" 1)
+;                                                    (println udp-packet)
+;                                                    (Thread/sleep 15)
+;                                                    (write-to-led "udp" 0))
+                                                  (println udp-packet);)
                                                  (let [^String code (first (clojure.string/split (:message udp-packet) #"\s+")) ^String sender (:host udp-packet)]
                                                    (cond
                                                      (= code "Server-up!")(do (reset! server-ip sender) (reset! wait-for-server? false))
@@ -602,7 +635,8 @@
                                                                              (Thread/sleep 250)
                                                                              (if (> i 0)
                                                                                (recur (dec i))
-                                                                               (do (Thread/sleep 500) ; allow all messages to be recieved before returning information
+                                                                               (do 
+                                                                                 (Thread/sleep 500) ; allow all messages to be received before returning information
                                                                                  (lamina/enqueue (second input-channel) @data))))))
                                                                          (when (= (first input-channel) DECLARE-SERVER-UP)
                                                                            (let [broadcast-ip (clojure.string/join "." (conj (subvec (clojure.string/split ip-address #"\.") 0 3) "255"))]
@@ -639,8 +673,8 @@
                               (cond
 
                                 (= code ip-address)
-
                                 ;This is a temporary solution to this problem.
+                                ;This task siphons data across network to a consumer.
                                 (do
                                   (println "Publishing data across network:  "(str "siphon -> " (first payload) " -> " (second payload)))
                                   (task-builder _ {:name (str "siphon -> " (first payload) " -> " (second payload))
@@ -707,14 +741,13 @@
                                 (send-net _ (util/package (first payload) (util/time-now))))))))
 
 
-    ;A go block used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the
+    ;Used for efficiency!  Handles the distribution of network data to the internal channels.  It is distributed by the tag on the
     ;network message (i.e., "kernel|{:hi 1}" would send {:hi 1} to the kernel channel)
     (lamina/receive-all (internal-channel _ :network-in-channel)
       (fn [msg]
         (let [parsed-msg (split msg #"\|")
               data-map (read-string (second parsed-msg))]
           (when-let  [^Channel ch (get @total-channel-list (keyword (first parsed-msg)))]
-            ;(println "putting this data:  " data-map "...on this internal channel:  " (keyword (first parsed-msg)))
             (lamina/enqueue ch data-map)))))
     _)
 
@@ -731,7 +764,7 @@
   ;Construct a cpu.  Give it a bunch of maps to store stuff in, an IP, a server ip (atomic so that it can change), a variable to determine if the CPU is still
   ;"alive", and an anonymous function containing the garbage collector!
 
-  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) ip (atom "NA") (atom true) (atom true)))] ; (fn [x] (garbage-collect x)))]
+  (let [new-cpu (construct (->Cyber-Physical-Unit (atom {}) (atom {}) (atom {}) (atom {}) (atom []) ip (atom "NA") (atom true) (atom true)))] ; (fn [x] (garbage-collect x)))]
     (with-meta new-cpu
       {:type ::cyber-physical-unit
       ::source (fn [] @(:task-list new-cpu))})))
@@ -767,6 +800,7 @@
            (Thread/sleep listen-time)
            (remove-channel unit ch)))
        @status-reports))
+
 (defn ping-cpu
 
   "Pings a given CPU, will return the time for one-way message transmission
@@ -826,7 +860,7 @@
       (let [result (deref (lamina/read-channel ch) timeout nil)]
 
         (remove-channel unit ch)
-
+          
         ;Return the result!
         result)))
 
@@ -834,14 +868,11 @@
 ;; and rebuilds the channels
 (defn rebuild-network-tasks [unit]
   (let [rebuild-fn (fn [unit data task-to-attach]
-                     (on-pool kernel-exec
+                     (future
                       (loop []
-;                        (spit "/sys/class/gpio/gpio24/value" "1")
                         (let [new-ch (genchan unit data)]
                           (if new-ch
-                            (do 
-;                              (spit "/sys/class/gpio/gpio24/value" "0")
-                              (t/attach task-to-attach new-ch))
+                            (t/attach task-to-attach new-ch)
                             (recur))))))]
     (doseq [i @(:task-list unit)]
       (doseq [k (:consumes (second i))]
@@ -861,84 +892,87 @@
    @on-disconnect the function to be run if/when the CPU is disconnected. Default nil"
 
   [unit  & {:keys [on-disconnect] :or {on-disconnect nil}}]
-  (on-pool kernel-exec
-           (loop [initial-establish? true]
-;            (spit "/sys/class/gpio/gpio4/value" "0")
+  (future
+         (loop [initial-establish? true]
 
-           ;Make the UDP client and wait for it to be initialized!
-             (if initial-establish?
-             @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
+         ;Make the UDP client and wait for it to be initialized!
+           (if initial-establish?
+           @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
 
-             (let [
-                   ;Make an atom for convenience
-                   found (atom false)
+           (let [
+                 ;Make an atom for convenience
+                 found (atom false)
 
-                   ;Get my neighbors via UDP broadcast!
-                   neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST]))
+                 ;Get my neighbors via UDP broadcast!
+                 neighbors @(lamina/read-channel (instruction unit [UDP-BROADCAST]))
 
-                   ;Convert the keys in the map to strings!
-                   neighbors (zipmap (doall (map name (keys neighbors))) (vals neighbors))
+                 ;Convert the keys in the map to strings!
+                 neighbors (zipmap (doall (map name (keys neighbors))) (vals neighbors))
 
-                   ;Get the ip's of the neighbors and put them into a set!
-                   neighbor-ips (set (keys neighbors))]
+                 ;Get the ip's of the neighbors and put them into a set!
+                 neighbor-ips (set (keys neighbors))]
 
-               ;Figure out if a server is already in existence...
-               (println neighbor-ips)
-               (doseq [k neighbor-ips :while (false? @found)]
-                 (when (not= (get neighbors k) "NA")
+             ;Figure out if a server is already in existence...
+             (println neighbor-ips)
+             (doseq [k neighbor-ips :while (false? @found)]
+               (when (not= (get neighbors k) "NA")
 
-                   ;Found a server!  Change the unit' IP to match and start a TCP client!
+                 ;Found a server!  Change the unit' IP to match and start a TCP client!
 
-                   (change-server-ip unit (get neighbors k))
-                   (reset! found true)
-                   (println "Server found")
-                   (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])
-                   (if-not initial-establish?
-                     (rebuild-network-tasks unit))))
+                 (change-server-ip unit (get neighbors k))
+                 (reset! found true)
+                 (println "Server found")
+                 (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])
+                 (if-not initial-establish?
+                   (rebuild-network-tasks unit))))
 
-               ;When a server isn't in existence, the LOWEST ip starts the server!
+             ;When a server isn't in existence, the LOWEST ip starts the server!
 
-               ;;insert algorithm here to determine sever
+             ;;insert algorithm here to determine sever
 
 
-               (when (not @found)
-                 (if (= (first neighbor-ips) (:ip-address unit))
-                   ;The case where this unit is the lowest IP
-                   (do
-                     (println "No server found. Establishing server...")
-                     (instruction unit [START-SERVER 8998])
- ;                    (spit "/sys/class/gpio/gpio4/value" "1")
-                     (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
-                     (if-not initial-establish?
-                       (rebuild-network-tasks unit)))
-
-                 ;The case where this unit is NOT the lowest ip
+             (when (not @found)
+               (if (= (first neighbor-ips) (:ip-address unit))
+                 ;The case where this unit is the lowest IP
                  (do
-                   ;hang on the server initialization
-                   (loop []
-                     (if @(:wait-for-server? unit)
-                       (recur)))
-                   (println "Connecting to: " @(:server-ip unit))
-                   (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])
+                   (println "No server found. Establishing server...")
+                   (instruction unit [START-SERVER 8998])
+                   (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                     (write-to-led "monitor" 1))
+                   (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
                    (if-not initial-establish?
-                     (rebuild-network-tasks unit))))))
+                     (rebuild-network-tasks unit)))
 
-           ;Check @ 'heartbeat' if the connection to the server is still alive
+               ;The case where this unit is NOT the lowest ip
+               (do
+                 ;hang on the server initialization
+                 (loop []
+                   (if @(:wait-for-server? unit)
+                     (recur)))
+                 (println "Connecting to: " @(:server-ip unit))
+                 (instruction unit [START-TCP-CLIENT @(:server-ip unit) 8998])
+                 (if-not initial-establish?
+                   (rebuild-network-tasks unit))))))
 
-            (loop []
-              (Thread/sleep 1000)
-              (toggle-gpio 25)
-               (if (ping-cpu unit (:ip-address unit))
-                 (recur)
+         ;Check @ 'heartbeat' if the connection to the server is still alive
 
-                 ;If there is supposed to be a function run on disconnect, run it!
-                 (do (println "connection to server lost")
-                   (reset! (:server-ip unit) "NA")
-                   (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and
-                                       ;;if the server is actually down, they will also start discovery
-                   @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
-                   (reset! (:wait-for-server? unit) true))))
-           (recur false))))
+          (loop []
+            (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+              (write-to-led "heartbeat" 1))
+            (Thread/sleep 1000)
+            (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+              (write-to-led "heartbeat" 0))
+            (if (ping-cpu unit (:ip-address unit))
+              (recur)
 
-
-
+              ;If there is supposed to be a function run on disconnect, run it!
+              (do 
+                (println "connection to server lost")
+                (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                  (write-to-led "monitor" 0))
+                (reset! (:server-ip unit) "NA")
+                (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and
+                                    ;;if the server is actually down, they will also start discovery
+                @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
+                (reset! (:wait-for-server? unit) true))))
+         (recur false))))

@@ -4,68 +4,75 @@
   (:use     [seesaw.core])
   (:gen-class))
 
-
-(defn -main [who]  ;; pass the jar either "ras-pi-1", "ras-pi-2", or "ras-pi-3"
-
-;;make gpio pins 18, 23, 24, and 25 writable outputs
-;(spit "/sys/class/gpio/export" "4") ;;for showing who the server is
-;(spit "/sys/class/gpio/gpio4/direction" "out")
-;
-;(spit "/sys/class/gpio/export" "18") ;; for showing when data is consumed
-;(spit "/sys/class/gpio/gpio18/direction" "out")
-;
-;(spit "/sys/class/gpio/export" "23") ;; for showing udp chatter
-;(spit "/sys/class/gpio/gpio23/direction" "out")
-;
-;(spit "/sys/class/gpio/export" "24")  ;; for showing dependency search
-;(spit "/sys/class/gpio/gpio24/direction" "out")
-;
-;(spit "/sys/class/gpio/export" "25")  ;;for showing heartbeat
-;(spit "/sys/class/gpio/gpio25/direction" "out")
-
+(defn -main [] 
+  (when (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+    (spit "/sys/class/gpio/export" "2")
+    (spit "/sys/class/gpio/export" "3")
+    (spit "/sys/class/gpio/export" "4")
+    (spit "/sys/class/gpio/export" "17")
+    (spit "/sys/class/gpio/export" "27")
+    (spit "/sys/class/gpio/export" "22")
+    (spit "/sys/class/gpio/export" "10")
+    (spit "/sys/class/gpio/export" "9")
+    (spit "/sys/class/gpio/gpio2/direction" "out")
+    (spit "/sys/class/gpio/gpio3/direction" "out")
+    (spit "/sys/class/gpio/gpio4/direction" "out")
+    (spit "/sys/class/gpio/gpio17/direction" "out")
+    (spit "/sys/class/gpio/gpio27/direction" "out")
+    (spit "/sys/class/gpio/gpio22/direction" "out")
+    (spit "/sys/class/gpio/gpio10/direction" "out")
+    (spit "/sys/class/gpio/gpio9/direction" "in"))
+  
 (def test-cpu (core/cyber-physical-unit (:ip (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj")))))
 (core/into-physicloud test-cpu)
 
+(def who (:color (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+(cond
+  (= who "red")
+  (core/task test-cpu {:name "red-ras-pi-producer"
+                        :function (fn [this] (println "red-ras-pi producing") (core/read-switch))
+                        :produces "red-ras-pi-data"
+                        :update-time 100})
+  (= who "yellow")
+  (core/task test-cpu {:name "yellow-ras-pi-producer"
+                        :function (fn [this] (println "yellow-ras-pi producing") (core/read-switch))
+                        :produces "yellow-ras-pi-data"
+                        :update-time 100})
+  (= who "green")
+  (core/task test-cpu {:name "green-ras-pi-producer"
+                        :function (fn [this] (println "green-ras-pi producing") (core/read-switch))
+                        :produces "green-ras-pi-data"
+                        :update-time 100})
+  (= who "orange")
+  (core/task test-cpu {:name "orange-ras-pi-producer"
+                        :function (fn [this] (println "orange-ras-pi producing") (core/read-switch))
+                        :produces "orange-ras-pi-data"
+                        :update-time 1000}))
   
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(if (= who "ras-pi-1")
-  (do
-  (core/task test-cpu {:name "ras-pi-1-producer"
-                        :function (fn [this] (println "producer producing") {:producer 42})
-                        :produces "ras-pi-1-data"
-                        :update-time 2000})
-  (Thread/sleep 3000)
-  (core/task test-cpu {:name "ras-pi-1-consumer"
-                       :function (fn [this ras-pi-3-data]
-                                   (println ras-pi-3-data)
-                                   (core/toggle-gpio 18))})))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(if (= who "ras-pi-2")
-  (do
-  (core/task test-cpu {:name "ras-pi-2-producer"
-                        :function (fn [this] (println "producer producing") {:producer 42})
-                        :produces "ras-pi-2-data"
-                        :update-time 2000})
-  (Thread/sleep 3000)
-  (core/task test-cpu {:name "ras-pi-2-consumer"
-                       :function (fn [this ras-pi-1-data]
-                                   (println ras-pi-1-data)
-                                   (core/toggle-gpio 18))})))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(if (= who "ras-pi-3")
-  (do  
-  (core/task test-cpu {:name "ras-pi-3-producer"
-                   :function (fn [this] (println "producer producing") {:producer 42})
-                   :produces "ras-pi-3-data"
-                   :update-time 2000})
-  (Thread/sleep 3000)
-  (core/task test-cpu {:name "ras-pi-3-consumer"
-                       :function (fn [this ras-pi-2-data]
-                                   (println ras-pi-2-data)
-                                  ; (core/toggle-gpio 18)
-                                   )})))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(Thread/sleep 3000)
+(core/task test-cpu {:name "red-ras-pi-consumer"
+                     :function (fn [this red-ras-pi-data]
+                                 (println red-ras-pi-data)
+                                 (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                                   (core/write-to-led "red" red-ras-pi-data)))})
+(core/task test-cpu {:name "yellow-ras-pi-consumer"
+                     :function (fn [this yellow-ras-pi-data]
+                                 (println yellow-ras-pi-data)
+                                 (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                                 (core/write-to-led "yellow" yellow-ras-pi-data)))})
+(core/task test-cpu {:name "green-ras-pi-consumer"
+                     :function (fn [this green-ras-pi-data]
+                                 (println green-ras-pi-data)
+                                 (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                                 (core/write-to-led "green" green-ras-pi-data)))})
+(core/task test-cpu {:name "orange-ras-pi-consumer"
+                     :function (fn [this orange-ras-pi-data]
+                                 (println orange-ras-pi-data)
+                                 (if (= "raspberry-pi" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+                                 (core/write-to-led "orange" orange-ras-pi-data)))})
+(Thread/sleep 5000)  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;User Interface code;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (if (= "laptop" (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
   (do
   (native!)

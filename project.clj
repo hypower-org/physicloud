@@ -14,5 +14,5 @@
                  [clojure-lanterna "0.9.4"]
                  [seesaw "1.4.4"]
                  ]
-  :main physicloud-tests.gpio-demo
-  :aot [physicloud-tests.gpio-demo])
+  :main physicloud-tests.gpio-button-test
+  :aot [physicloud-tests.gpio-button-test])
