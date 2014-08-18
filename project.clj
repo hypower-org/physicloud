@@ -12,4 +12,6 @@
                  [criterium "0.4.3"]
                  [org.clojure/data.csv "0.1.2"]
                  [clojure-lanterna "0.9.4"]
-                 [seesaw "1.4.4"]])
+                 [seesaw "1.4.4"]]
+  :main physicloud-tests.multi-agent-test
+  :aot [physicloud-tests.multi-agent-test])

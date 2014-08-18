@@ -1,20 +1,23 @@
 (ns physicloud-tests.multi-agent-test
   (:require [physicloud.core :as core]
-            [physicloud.task :as t]))
+            [physicloud.task :as t])
+  (:gen-class))
 
  ;This test demonstrates the creation of a basic Cyber Physical Unit in PhysiCloud.
 
 ; Create a CPU at the provided IP address.
-(defn -main []
+(defn -main [ip who]
 ;; edit this for a specific cpu's ip
-(def test-cpu (core/cyber-physical-unit (:ip (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj")))))
+(def test-cpu (core/cyber-physical-unit ip));(:ip (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj")))))
 
 
 (core/into-physicloud test-cpu)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defn laptop-one []
+(Thread/sleep 2000)
+(cond
+(= who "agent-1") 
+(do
 	(core/task test-cpu {:name "map-producer"
 	                      :function (fn [this] (println "map producer producing") {:producer "42"})
 	                      :produces "awesome-data-map"
@@ -51,7 +54,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn laptop-two []
+(= who "agent-2")
+(do
 	(core/task test-cpu {:name "float-producer"
 	                      :function (fn [this] (println "float producer producing") 99.99999)
 	                      :produces "awesome-float"
@@ -88,7 +92,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defn udoo-one []
+(= who "agent-3")
+(do
 	(core/task test-cpu {:name "map-of-maps-producer"
 	                      :function (fn [this] (println "map-of-maps producer producing") {:one {:one "map1"} :two {:two "map2"} :three {:three "map3"}})
 	                      :produces "awesome-map-of-maps"
@@ -125,7 +130,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defn udoo-two []
+(= who "agent-1")
+(do
 	(core/task test-cpu {:name "information-producer"
 	                      :function (fn [this] (println "information producer producing") "information from udoo2")
 	                      :produces "awesome-information"
@@ -160,7 +166,8 @@
 	                     })
 )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn ras-pi []
+(= who "agent-5")
+(do
 	(core/task test-cpu {:name "ras-pi-producer"
 	                      :function (fn [this] (println "ras-pi producer producing") "information from ras-pi")
 	                      :produces "awesome-ras-pi-data"
@@ -178,6 +185,6 @@
 	                     })
 )
 
-)
+))
  
 
