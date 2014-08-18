@@ -49,6 +49,8 @@
 
 ;(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
 
+(def device (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+
 (defmacro on-pool
   "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
   [^ScheduledThreadPoolExecutor pool & code]
@@ -221,7 +223,7 @@
    @listen-time The time the function will listen over the network before returning :failed. Default is '100' "
   [unit data & {:keys [listen-time] :or {listen-time 100}}]
 
-  (println "Checking locally to see if the channel-list.......contains: " data);;debug
+  ;(println "Checking locally to see if the channel-list.......contains: " data);;debug
   ;Check if the CPU has the data locally..dependency met, return nil
   (cond
    (contains? (merge @(:external-channel-list unit) @(:internal-channel-list unit)) data)
@@ -234,7 +236,7 @@
    ;from server, returns nil if no such channel exists
    (ping-channel unit (clojure.core/name data))
      (do
-       (println "the server has this data!")
+       ;(println "the server has this data!")
        (let [ch (external-channel unit data)]
          (subscribe-and-wait unit ch)
          ch))
@@ -253,7 +255,7 @@
                          cb (fn [x] (swap! collected-data conj (first x)))]
 
                      ;(if (or (= data :awesome-data-map1) (= data :awesome-data-map2) (= data :awesome-data-map3) (= data :awesome-data-map4) (= data :awesome-data-map5))
-                     (println "going over network to find channel: " data)
+                     ;(println "going over network to find channel: " data)
 
                      ;Receive all the data from the temp. channel, subscribe to the network channel, and then request information of the given type.
                      (if (subscribe-and-wait unit ch)
@@ -272,7 +274,7 @@
       ;If the data still is not in local lists ... and you actually got something
       (if-not (contains? (merge @(:external-channel-list unit) @(:internal-channel-list unit)) data)
        (if-not (empty? net-data)
-        (do (println "the first to respond to the" data " data was..: "(first net-data))
+        (do ;(println "the first to respond to the" data " data was..: "(first net-data))
          (let [
                ;Choose the first CPU that responded!
                chosen (first net-data)
@@ -298,7 +300,7 @@
            (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
            ch))
         (do
-          (println "That data wasnt found anywhere")
+          ;(println "That data wasnt found anywhere")
           nil))
        (println data" data was in the local list!")))))
 
@@ -545,6 +547,8 @@
                                         :without-locking true
                                         :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
+                                                      (if (= "raspberry-pi" device)
+                                                        (util/write-to-led "monitor" 0))
                                                       (kill-task _ (:name this))
                                                       (kill server)
                                                       (println "just killed server")
@@ -871,7 +875,14 @@
            ;Make the UDP client and wait for it to be initialized!
              (if initial-establish?
              @(lamina/read-channel (instruction unit [START-UDP-CLIENT])))
-
+             (future 
+               (if (= "raspberry-pi" device)
+                 (loop [i 5]
+		               (util/write-to-led "udp" 1)
+		               (Thread/sleep 125)
+		               (util/write-to-led "udp" 0)
+                   (Thread/sleep 125)
+                   (if (> i 1)(recur (dec i))))))
              (let [
                    ;Make an atom for convenience
                    found (atom false)
@@ -894,7 +905,7 @@
 
                    (change-server-ip unit (get neighbors k))
                    (reset! found true)
-                   (println "Server found")
+                   (println "Server found .. connecting to" (get neighbors k))
                    (instruction unit [START-TCP-CLIENT (get neighbors k) 8998])
                    (if-not initial-establish?
                      (rebuild-network-tasks unit))))
@@ -909,6 +920,8 @@
                    ;The case where this unit is the lowest IP
                    (do
                      (println "No server found. Establishing server...")
+                     (if (= "raspberry-pi" device)
+                       (util/write-to-led "monitor" 1))
                      (instruction unit [START-SERVER 8998])
                      (instruction unit [START-TCP-CLIENT (:ip-address unit) 8998])
                      (if-not initial-establish?
@@ -928,14 +941,20 @@
            ;Check @ 'heartbeat' if the connection to the server is still alive
 
             (loop []
-              (Thread/sleep 1000)
+              (Thread/sleep 2000)
                (if (ping-cpu unit (:ip-address unit))
-                 (recur)
+                 (do
+                  (if (= "raspberry-pi" device)
+                    (do
+		                  (util/write-to-led "heartbeat" 1)
+		                  (Thread/sleep 100)
+		                  (util/write-to-led "heartbeat" 0)))
+                  (recur))
 
                  ;If there is supposed to be a function run on disconnect, run it!
                  (do (println "connection to server lost")
                    (reset! (:server-ip unit) "NA")
-                   (Thread/sleep 2000) ;;ensure that all other cpu's have run a heartbeat and
+                   (Thread/sleep 3000) ;;ensure that all other cpu's have run a heartbeat and
                                        ;;if the server is actually down, they will also start discovery
                    @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
                    (reset! (:wait-for-server? unit) true))))

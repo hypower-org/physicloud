@@ -1,4 +1,4 @@
-(defproject PhysiCloud "1.0.0"
+(defproject PhysiCloud "nsf-demo"
   :description "PhysiCloud: A software platform to facilitate the programming of cyber-physical systems."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
@@ -13,5 +13,5 @@
                  [org.clojure/data.csv "0.1.2"]
                  [clojure-lanterna "0.9.4"]
                  [seesaw "1.4.4"]]
-  :main physicloud-tests.multi-agent-test
-  :aot [physicloud-tests.multi-agent-test])
+  :main physicloud-tests.nsf-demo
+  :aot [physicloud-tests.nsf-demo])

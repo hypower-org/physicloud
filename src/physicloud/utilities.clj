@@ -26,6 +26,8 @@
 ;  [^ManyToManyChannel async-channel message]
 ;  (async/put! async-channel message)) 
 
+(def device (:device (load-file (str (System/getProperty "user.dir") "/physicloud-config.clj"))))
+
 (defmacro time+ 
   "Ouputs the time the operation took as a double (in ms).  First YCP macro! #1"
   [^Channel ch & code]
@@ -53,3 +55,23 @@
   "Utility function for networking."
   [& args]
   (reduce (fn [val x] (str val "|" x)) args))
+
+(defn write-to-led [led val]
+  (cond 
+    (= "heartbeat" led) (spit "/sys/class/gpio/gpio2/value" val)
+    (= "udp" led) (spit "/sys/class/gpio/gpio3/value" val)
+    (= "monitor" led) (spit "/sys/class/gpio/gpio4/value" val)
+    (= "red" led) (spit "/sys/class/gpio/gpio17/value" val)
+    (= "yellow" led) (spit "/sys/class/gpio/gpio27/value" val)
+    (= "green" led) (spit "/sys/class/gpio/gpio22/value" val)
+    (= "orange" led) (spit "/sys/class/gpio/gpio10/value" val)))
+
+(defn read-switch[]
+  (cond
+    (= "raspberry-pi" device) (slurp "/sys/class/gpio/gpio9/value")
+    (= "laptop" device) (slurp "/home/ug-research/gpio/gpio9/value")
+    (= "udoo" device ) (slurp "/home/ubuntu/gpio/gpio9/value")))
+
+
+
+
