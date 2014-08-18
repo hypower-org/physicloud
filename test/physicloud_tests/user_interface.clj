@@ -105,7 +105,8 @@
 							                                                                  (toggle :id :inspect :text "Inspect"  :listen [:action (fn [x] (set-inspect-view))])
 							                                                                  (toggle :id :create-task :text "Create Task" :listen [:action (fn [x] (set-create-task-view))])
 							                                                                  (toggle :id :kill-task :text "Kill Task" :listen [:action (fn [x] (set-kill-task-view))])
-							                                                                  (toggle :id :ping-cpu :text "Ping CPU" :listen [:action (fn [x] (set-ping-cpu-view))])])  )                                            
+							                                                                  (toggle :id :ping-cpu :text "Ping CPU" :listen [:action (fn [x] (set-ping-cpu-view))])
+                                                                                (toggle :id :inspect :text "KILL SERVER"  :listen [:action (fn [x] (core/kill-server test-cpu)(set-inspect-view))])])  )                                            
  (defn set-inspect-view [] (display (border-panel
                                         :north north-fp
                                         :center (scrollable cpu-specs-lb)

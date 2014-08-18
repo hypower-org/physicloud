@@ -698,8 +698,11 @@
                                   (send-net _ (util/package (first payload) map-to-send)))
                                
                                
+                                ;;send stop-server command locally after recieving the command over the kernel
+                                (= code STOP-SERVER)
+                                (instruction _ [STOP-SERVER])
+                                
                                 ;The CPU is being pinged!  Respond with the time it got the ping...
-
                                 ;PING expects [OP-CODE name-of-network-channel]
 
                                 (= code PING)
@@ -737,6 +740,10 @@
 
 (defmethod print-method ::cyber-physical-unit [o ^Writer w]
   (print-method ((::source (meta o))) w))
+
+(defn kill-server [unit]
+  (println "sending kill command over kernel")
+  (send-net unit (util/package "kernel" [STOP-SERVER])))
 
 (defn request-status 
   "gets the status data of all the neighbors that are currently connected to the server. 
