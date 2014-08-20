@@ -4,13 +4,11 @@
             [gloss.core :as gloss]
             [aleph.tcp :as aleph]
             [physicloud.task :as t]
+            [physicloud.net :as pcnet]
             [physicloud.utilities :as util]
            )
   (:use [clojure.string :only (join split)])
   (:import [lamina.core.channel Channel]
-           [java.util.concurrent TimeUnit]
-           [java.util.concurrent Executors]
-           [java.util.concurrent ScheduledThreadPoolExecutor]
            [java.io StringWriter]
            [java.io PrintWriter]
            java.io.Writer))
@@ -49,112 +47,15 @@
 
 ;(def ^ScheduledThreadPoolExecutor kernel-exec (Executors/newScheduledThreadPool  8));(* 8 (.availableProcessors (Runtime/getRuntime)))))
 
-(defmacro on-pool
-  "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
-  [^ScheduledThreadPoolExecutor pool & code]
-  `(.execute ~pool (fn [] (try ~@code (catch Exception e# (println (str "caught exception: \"" (.getMessage e#) (.printStackTrace e#))))))))
-
-;Server messages are delmited by |
-
-(defprotocol IClientHandler
-  (subscribe [this channel-name] "Adds a subcribtion to a logical channel.  Handled by the server")
-  (unsubscribe [this channel-name] "Removes a subscription from a logical channel.  Handled by the server")
-  (handler [this msg] "Handles the messages from a client (i.e., relaying them to the server/to other clients subscribed)"))
-
-(defrecord ClientHandler [channel-list ^Channel client-channel ^String client-ip]
-
-  IClientHandler
-
-  (subscribe
-    [this channel-name]
-      (let [c (keyword channel-name)]
-        (when-not (contains? @channel-list c)
-          (swap! channel-list assoc c (atom {})))
-        (swap! (c @channel-list) assoc client-channel client-ip))
-      (lamina/enqueue client-channel (str channel-name "|" "connected")))
-
-  (unsubscribe
-    [this channel-name]
-    (let [c (keyword channel-name)]
-      (when-let [c-list (c @channel-list)]
-        (swap! c-list dissoc client-channel)
-        (if (empty? @c-list)
-          (swap! channel-list dissoc c)))))
-
-  (handler
-    [this msg]
-    (let [
-
-        parsed-msg (clojure.string/split msg #"\|")
-
-        code (first parsed-msg)
-
-        payload (rest parsed-msg)]
-
-      (cond
-
-        (= code "subscribe")
-
-        (subscribe this (first payload))
-
-        (= code "unsubscribe")
-
-        (unsubscribe this (first payload))
-
-        (= code "ping")
-
-        (do
-          (let [kernel-list @(:kernel @channel-list) 
-                client-to-ping (get (set (vals kernel-list)) (first (read-string (first payload))))]
-            (when client-to-ping
-              (doseq [i (keys kernel-list)]
-                (if (= (get kernel-list i) client-to-ping)
-                  (lamina/enqueue i (str "kernel|"(second payload))))))))
-
-
-        (= code "ping-channel")
-
-        ;Check how many people are listening to a channel!
-        (let [processed-payload (read-string (first payload))
-              ip (first processed-payload)
-              ch (get @channel-list (keyword (second processed-payload)))]
-
-          (if (and (= ip client-ip) ch) ;will not execute if the ip is not a client or if the channel does not exist
-            (lamina/enqueue client-channel (str (nth processed-payload 2)"|"(count @ch)))))
-
-
-        :else
-        (do
-          (when-let [c-list (get @channel-list (keyword code))]
-            (doseq [i (keys @c-list)]
-              (when (= (lamina/enqueue i msg) :lamina/closed!)
-                (swap! c-list dissoc i)
-                (if (empty? @c-list)
-                  (swap! channel-list dissoc (keyword code)))))))))))
-
-(defprotocol ITCPServer
-  (tcp-client-handler [this channel client-info] "The handler for a connected TCP client")
-  (kill [this] "Kills the server"))
-
-(defrecord TCPserver [client-list kill-function]
-
-  ITCPServer
-
-  (tcp-client-handler
-    [this channel client-info]
-
-    (let [client-handler (->ClientHandler client-list channel (:address client-info))]
-
-      (lamina/receive-all channel (fn [msg] (handler client-handler msg)))))
-
-  (kill
-    [this]
-    (@kill-function)))
+;(defmacro on-pool
+;  "Wraps a portion of code in a function and executes it on the given thread pool.  Will catch exceptions!"
+;  [^ScheduledThreadPoolExecutor pool & code]
+;  `(.execute ~pool (fn [] (try ~@code (catch Exception e# (println (str "caught exception: \"" (.getMessage e#) (.printStackTrace e#))))))))
 
 (defn tcp-server
   [port]
-  (let [server (->TCPserver (atom {}) (atom "initializing..."))]
-    (reset! (:kill-function server) (aleph/start-tcp-server (fn [channel client-info] (tcp-client-handler server channel client-info))
+  (let [server (pcnet/->TCPserver (atom {}) (atom "initializing..."))]
+    (reset! (:kill-function server) (aleph/start-tcp-server (fn [channel client-info] (pcnet/tcp-client-handler server channel client-info))
                                                             {:port port
                                                              :frame (gloss/string :utf-8 :delimiters ["\r\n"])}))
 
@@ -284,17 +185,17 @@
                     (subscribe-and-wait unit ch)
                     ch)]
            (swap! (:producer-ip-list unit) conj chosen)
-           
+
            (future ;;spawn thread for periodically checking the existence of new producer
-             (loop [] 
+             (loop []
                (if (ping-cpu unit chosen)
-                 (do 
-                   (Thread/sleep 5000) 
+                 (do
+                   (Thread/sleep 5000)
                    (recur))
                  (do
                    (println "Lost connection to producer. rebuilding network tasks")
                    (rebuild-network-tasks unit)))))
-           
+
            (send-net unit (util/package "kernel" [chosen ch-name (:ip-address unit)]))
            ch))
         (do
@@ -601,7 +502,7 @@
                                                                              (Thread/sleep 250)
                                                                              (if (> i 0)
                                                                                (recur (dec i))
-                                                                               (do 
+                                                                               (do
                                                                                  (Thread/sleep 500) ; allow all messages to be received before returning information
                                                                                  (lamina/enqueue (second input-channel) @data))))))
                                                                          (when (= (first input-channel) DECLARE-SERVER-UP)
@@ -696,12 +597,12 @@
                                                         :version (System/getProperty "os.version")
                                                         :architecture (System/getProperty "os.arch")}}]
                                   (send-net _ (util/package (first payload) map-to-send)))
-                               
-                               
+
+
                                 ;;send stop-server command locally after recieving the command over the kernel
                                 (= code STOP-SERVER)
                                 (instruction _ [STOP-SERVER])
-                                
+
                                 ;The CPU is being pinged!  Respond with the time it got the ping...
                                 ;PING expects [OP-CODE name-of-network-channel]
 
@@ -745,26 +646,26 @@
   (println "sending kill command over kernel")
   (send-net unit (util/package "kernel" [STOP-SERVER])))
 
-(defn request-status 
-  "gets the status data of all the neighbors that are currently connected to the server. 
+(defn request-status
+  "gets the status data of all the neighbors that are currently connected to the server.
    Every message received in the channel should be a map with the following keys:
    {:ip ...          ;their IP address
-    :tasks ...       ;their current task list   
+    :tasks ...       ;their current task list
     :produces ....   ;datatypes of everything it produces
-    :processors .... ;num available processors 
+    :processors .... ;num available processors
     :os ...}         ;the operating system"
   [unit & {:keys [listen-time] :or {listen-time 1000}}]
-  
+
     (let [
            ;Establish a temporary channel name.
-           ch-name (str (gensym (str "r_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))    
-           ch (temporary-channel unit (keyword ch-name)) 
-           status-reports (atom #{}) 
+           ch-name (str (gensym (str "r_" (clojure.string/join (clojure.string/split (:ip-address unit) #"\.")) "_")))
+           ch (temporary-channel unit (keyword ch-name))
+           status-reports (atom #{})
 
            ;Collect all the data from the temporary channel in the atomic map!
            cb (fn [x] (swap! status-reports conj x))]
-      
-       (if (subscribe-and-wait unit ch) 
+
+       (if (subscribe-and-wait unit ch)
          (do
            (lamina/receive-all ch cb)
            (send-net unit (util/package "kernel" [REQUEST-STATUS ch-name]))
@@ -833,7 +734,7 @@
       (let [result (deref (lamina/read-channel ch) timeout nil)]
 
         (remove-channel unit ch)
-          
+
         ;Return the result!
         result)))
 
