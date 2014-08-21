@@ -447,7 +447,7 @@
                                         :function (fn [this input-channel]
                                                     (when (= (first input-channel) STOP-SERVER)
                                                       (kill-task _ (:name this))
-                                                      (kill server)
+                                                      (pcnet/kill server)
                                                       (println "just killed server")
                                                       (lamina/enqueue (second input-channel) true)))})
 
@@ -841,6 +841,3 @@
                    @(lamina/read-channel(instruction unit [STOP-TCP-CLIENT]))
                    (reset! (:wait-for-server? unit) true))))
            (recur false))))
-
-
-
