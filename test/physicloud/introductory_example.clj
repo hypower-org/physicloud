@@ -20,7 +20,7 @@ w/outline
 
 ;'Outline' takes the title, dependencies, and functionality of a node as a function with arity equal to the number of its dependencies.
 
-;This isn't anything fancy.  Under the hood, it's just generating a hasmap that looks like this: 
+;This isn't anything fancy.  Under the hood, it's just generating a hashmap that looks like this: 
 
 #_{:title :a 
    :tributaries []
