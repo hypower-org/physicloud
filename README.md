@@ -5,11 +5,14 @@ This repository houses the code for PhysiCloud, a platform for programming and m
 
 The current release of the software provides programming abstractions for what we call cyber-physical resources: sensors, actuators, and computational results. All resources are modeled as channels, much like the resource model in the asynchronous distributed pi-calculus [2].
 
-Developers can implement controllers in Clojure and deploy each within a PhysiCloud task. PhysiCloud automatically handles the resource dependencies, whether they are internal or networked. Our framework leverages some great Clojure libraries to enable our abstractions, such as [lamina](http://github.com/ztellman/lamina) and [aleph](http://github.com/ztellman/aleph).
+Developers implement controllers in Clojure and deploy each within a PhysiCloud task. PhysiCloud automatically handles the resource dependencies, whether they are internal or networked. Our framework leverages Clojure libraries to enable our abstractions, such as our own [watershed](https://github.com/hypower-org/watershed) and [aleph](http://github.com/ztellman/aleph).
 
-PhysiCloud is should be able to run on any system that has the most recent versions of Clojure and Java 7. We have tested it on the [Udoo](http://www.udoo.org) as well as laptops. We hope to test it on Raspberry Pis and BeagleBone Blacks as soon as we get them in our hands!
+PhysiCloud is tested on Linux and OSX based systems with the Java 7 JVM installed. It is also tested on the following embedded systems when a AOT compilation is run on the code:
+* Beaglebone Black
+* Raspberry Pi B+
+* Udoo
 
-Tutorials will be coming soon! For now, check out our test code for an example.
+For an example of how to construct a PhysiCloud instance, check out the [introductory example](https://github.com/hypower-org/physicloud/blob/master/test/physicloud/introductory_example.clj) source code.
 
 ---
 ### References
