@@ -5,8 +5,7 @@
             [byte-streams :as b]
             [watershed.core :as w]
             [taoensso.nippy :as nippy]
-            [aleph.udp :as udp]
-            [watershed.utils :as u])
+            [aleph.udp :as udp])
   (:use [physicloud.utils]
         [gloss.core]
         [gloss.io]))
@@ -99,7 +98,7 @@
         
         respondents (atom [])
         
-        msg {:message (nippy/freeze [(u/cpu-units) ip]) :port udp-port 
+        msg {:message (nippy/freeze [(cpu-units) ip]) :port udp-port 
              :host (let [split (butlast (clojure.string/split ip #"\."))]
                      (str (clojure.string/join (interleave split (repeat (count split) "."))) "255"))}
         

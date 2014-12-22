@@ -91,24 +91,24 @@
     
    streams))
 
+(defn- is-os? [desired-os]
+  (zero? (compare (java.lang.System/getProperty "os.name") desired-os)))
 
-
-
-
-
-
-
-
-
-
-
-
-      
+(defn ^double cpu-units
+  []
+  (let [^String result (cond
+                         (is-os? "Linux") (filter identity (map (comp last #(if % (clojure.string/split % #"\s+")) #(re-matches #"CPU.*\d" %)) (clojure.string/split (:out (sh "lscpu")) #"\n")))
+                         ; Mac uses sysctl -a ... (fn [str] (re-matches #"machdep.cpu.*" str))
+                         ; Need machdep.cpu.core_count and machdep.cpu.brand_string
+                         (is-os? "Mac OS X")  (filter identity (map (comp last 
+                                                                          #(if % (clojure.string/split % #"\s+")) 
+                                                                          (fn [str] (re-matches #"machdep.cpu.*" str))) 
+                                                                    (clojure.string/split (:out (sh "sysctl" "-a")) #"\n")))
+                         :else ("0" "0" "0"))]
     
-    
+    (* (read-string (first result)) (read-string (last result)))))
 
-
-
-
-
-
+; development code down here....
+; (map (fn [str] (split str "=")) mach-deps)
+; Idea: build a map of the machdep.cpu keys
+; (zipmap (map first example-coll) (map second example-coll))
