@@ -1,7 +1,8 @@
 (ns physicloud.utils
   (:require [manifold.stream :as s]
             [manifold.deferred :as d]
-            [clojure.data.int-map :as i]))
+            [clojure.data.int-map :as i]
+            [clojure.java.shell :as shell]))
 
 (defn manifold-step 
   ([] (s/stream))
@@ -94,21 +95,32 @@
 (defn- is-os? [desired-os]
   (zero? (compare (java.lang.System/getProperty "os.name") desired-os)))
 
+(defn- split-on-spaces [str]
+  (if str
+    (clojure.string/split str #"\s+")))
+
+(defn- split-on-equals [str]
+  (if str
+    (clojure.string/split str #"=+")))
+
+; There must be a more clever way to figure this out. For now, it works ok!
+(defn- get-macos-cpu-map []
+  (let [macos-cpu-info (map (fn [str] (clojure.string/split str #"=")) (filter identity (map (fn [str] (re-find #"machdep.cpu.*" str))
+                               (clojure.string/split (:out (shell/sh "sysctl" "-ae")) #"\n"))))]
+    (zipmap (map (fn [e] (keyword (first e))) macos-cpu-info) (map second macos-cpu-info))))
+
 (defn ^double cpu-units
   []
   (let [^String result (cond
-                         (is-os? "Linux") (filter identity (map (comp last #(if % (clojure.string/split % #"\s+")) #(re-matches #"CPU.*\d" %)) (clojure.string/split (:out (sh "lscpu")) #"\n")))
+                         (is-os? "Linux") (filter identity (map (comp last 
+                                                                      split-on-spaces 
+                                                                      #(re-matches #"CPU.*\d" %)) ; looks for matching entries with digits
+                                                                (clojure.string/split (:out (shell/sh "lscpu")) #"\n")))
                          ; Mac uses sysctl -a ... (fn [str] (re-matches #"machdep.cpu.*" str))
                          ; Need machdep.cpu.core_count and machdep.cpu.brand_string
-                         (is-os? "Mac OS X")  (filter identity (map (comp last 
-                                                                          #(if % (clojure.string/split % #"\s+")) 
-                                                                          (fn [str] (re-matches #"machdep.cpu.*" str))) 
-                                                                    (clojure.string/split (:out (sh "sysctl" "-a")) #"\n")))
-                         :else ("0" "0" "0"))]
+                         (is-os? "Mac OS X") `("1" "1" "1")  
+                         :else `("0" "0" "0"))]
     
-    (* (read-string (first result)) (read-string (last result)))))
-
-; development code down here....
-; (map (fn [str] (split str "=")) mach-deps)
-; Idea: build a map of the machdep.cpu keys
-; (zipmap (map first example-coll) (map second example-coll))
+    ;(* (read-string (first result)) (read-string (last result)))
+    result
+    ))
