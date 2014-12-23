@@ -104,6 +104,8 @@
     (clojure.string/split str #"=+")))
 
 ; There must be a more clever way to figure this out. For now, it works ok!
+; Wow - way to complicated! Just call the specific terminal command: (shell/sh "sysctl" "-n" "machdep.cpu.brand_string")
+; and (shell/sh "sysctl" "-n" "machdep.cpu.core_count")!!! Fix this soon.
 (defn- get-macos-cpu-map []
   (let [macos-cpu-info (map (fn [str] (clojure.string/split str #"=")) (filter identity (map (fn [str] (re-find #"machdep.cpu.*" str))
                                (clojure.string/split (:out (shell/sh "sysctl" "-ae")) #"\n"))))]
@@ -118,9 +120,17 @@
                                                                 (clojure.string/split (:out (shell/sh "lscpu")) #"\n")))
                          ; Mac uses sysctl -a ... (fn [str] (re-matches #"machdep.cpu.*" str))
                          ; Need machdep.cpu.core_count and machdep.cpu.brand_string
-                         (is-os? "Mac OS X") `("1" "1" "1")  
+                         (is-os? "Mac OS X") (let [macos-cpu-map get-macos-cpu-map
+                                                   brand-string (:machdep.cpu.brand_string macos-cpu-map)
+                                                   num-cores (read-string (:machdep.cpu.core_count macos-cpu-map))]
+                                               ; Process the speed of the proc.
+                                               
+                                               ) 
                          :else `("0" "0" "0"))]
     
     ;(* (read-string (first result)) (read-string (last result)))
     result
     ))
+
+; idea: (clojure.string/split (second (clojure.string/split (:machdep.cpu.brand_string testmap) #"\w*@\s")) #"GHz")
+; Could be useful for extracting the numerical speed from the cpu info.
