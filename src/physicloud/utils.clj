@@ -107,7 +107,7 @@
 ; One could call the specific terminal command: (shell/sh "sysctl" "-n" "machdep.cpu.brand_string")
 ; or (shell/sh "sysctl" "-n" "machdep.cpu.core_count"). This function will pull all processor information.
 (defn- macos-cpu-map []
-  (let [macos-cpu-info (map (fn [str] (clojure.string/split str #"=")) (filter identity (map (fn [str] (re-find #"machdep.cpu.*" str))
+  (let [macos-cpu-info (map (fn [str] (split-on-equals str)) (filter identity (map (fn [str] (re-find #"machdep.cpu.*" str))
                                (clojure.string/split-lines (:out (shell/sh "sysctl" "-ae"))))))]
     (zipmap (map (fn [e] (keyword (first e))) macos-cpu-info) (map second macos-cpu-info))))
 
@@ -121,15 +121,9 @@
                          ; Need machdep.cpu.core_count and machdep.cpu.brand_string
                          (is-os? "Mac OS X") (let [cpu-map (macos-cpu-map)
                                                    proc-speed (* 1000
-                                                                 (read-string ; Number returned in GHz. Base unit across cybere-physical units is MHz.
+                                                                 (read-string ; Number returned in GHz. Base unit across cyber-physical units is MHz.
                                                                   (re-find #"\d+\.\d+" (second (clojure.string/split (:machdep.cpu.brand_string cpu-map) #"\w*@\s")))))
                                                    num-cores (read-string (:machdep.cpu.core_count cpu-map))]
                                                (list proc-speed -1 num-cores)) 
-                         :else (list 0 0 0))]
-    
-    ;(* (read-string (first result)) (read-string (last result)))
-    result
-    ))
-
-; idea: (clojure.string/split (second (clojure.string/split (:machdep.cpu.brand_string testmap) #"\w*@\s")) #"GHz")
-; Could be useful for extracting the numerical speed from the cpu info.
+                         :else (list 1 1 1))] ; For non-supported os, returns 1.
+    (* (first result) (last result))))
