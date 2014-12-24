@@ -104,11 +104,11 @@
     (clojure.string/split str #"=+")))
 
 ; There must be a more clever way to figure this out. For now, it works ok!
-; Wow - way to complicated! Just call the specific terminal command: (shell/sh "sysctl" "-n" "machdep.cpu.brand_string")
-; and (shell/sh "sysctl" "-n" "machdep.cpu.core_count")!!! Fix this soon.
-(defn- get-macos-cpu-map []
+; One could call the specific terminal command: (shell/sh "sysctl" "-n" "machdep.cpu.brand_string")
+; or (shell/sh "sysctl" "-n" "machdep.cpu.core_count"). This function will pull all processor information.
+(defn- macos-cpu-map []
   (let [macos-cpu-info (map (fn [str] (clojure.string/split str #"=")) (filter identity (map (fn [str] (re-find #"machdep.cpu.*" str))
-                               (clojure.string/split (:out (shell/sh "sysctl" "-ae")) #"\n"))))]
+                               (clojure.string/split-lines (:out (shell/sh "sysctl" "-ae"))))))]
     (zipmap (map (fn [e] (keyword (first e))) macos-cpu-info) (map second macos-cpu-info))))
 
 (defn ^double cpu-units
@@ -116,17 +116,16 @@
   (let [^String result (cond
                          (is-os? "Linux") (filter identity (map (comp last 
                                                                       split-on-spaces 
-                                                                      #(re-matches #"CPU.*\d" %)) ; looks for matching entries with digits
-                                                                (clojure.string/split (:out (shell/sh "lscpu")) #"\n")))
-                         ; Mac uses sysctl -a ... (fn [str] (re-matches #"machdep.cpu.*" str))
+                                                                      #(re-matches #"CPU.*\d" %))
+                                                                (clojure.string/split-lines (:out (shell/sh "lscpu")))))
                          ; Need machdep.cpu.core_count and machdep.cpu.brand_string
-                         (is-os? "Mac OS X") (let [macos-cpu-map get-macos-cpu-map
-                                                   brand-string (:machdep.cpu.brand_string macos-cpu-map)
-                                                   num-cores (read-string (:machdep.cpu.core_count macos-cpu-map))]
-                                               ; Process the speed of the proc.
-                                               
-                                               ) 
-                         :else `("0" "0" "0"))]
+                         (is-os? "Mac OS X") (let [cpu-map (macos-cpu-map)
+                                                   proc-speed (* 1000
+                                                                 (read-string ; Number returned in GHz. Base unit across cybere-physical units is MHz.
+                                                                  (re-find #"\d+\.\d+" (second (clojure.string/split (:machdep.cpu.brand_string cpu-map) #"\w*@\s")))))
+                                                   num-cores (read-string (:machdep.cpu.core_count cpu-map))]
+                                               (list proc-speed -1 num-cores)) 
+                         :else (list 0 0 0))]
     
     ;(* (read-string (first result)) (read-string (last result)))
     result
