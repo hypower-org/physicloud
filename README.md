@@ -14,6 +14,10 @@ PhysiCloud is tested on Linux and OSX based systems with the Java 7 JVM installe
 
 For an example of how to construct a PhysiCloud instance, check out the [introductory example](https://github.com/hypower-org/physicloud/blob/master/test/physicloud/introductory_example.clj) source code.
 
+To include PhysiCloud into your clojure project, use the following:
+
+    [hypower-org/physicloud "0.1.1"]
+
 ---
 ### References
 
