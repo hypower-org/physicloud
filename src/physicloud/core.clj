@@ -5,9 +5,9 @@
             [byte-streams :as b]
             [watershed.core :as w]
             [taoensso.nippy :as nippy]
-            [aleph.udp :as udp])
-  (:use [physicloud.utils]
-        [gloss.core]
+            [aleph.udp :as udp]
+            [physicloud.utils :as util])
+  (:use [gloss.core]
         [gloss.io]))
 
 (def ^:private B-ary (Class/forName "[B"))
@@ -16,7 +16,7 @@
 
 (defn assemble-phy 
   [& outlines] 
-  (apply w/assemble manifold-step manifold-connect outlines))
+  (apply w/assemble util/manifold-step util/manifold-connect outlines))
 
 (defn- ^String delimit 
   [^String s]
@@ -98,7 +98,7 @@
         
         respondents (atom [])
         
-        msg {:message (nippy/freeze [(cpu-units) ip]) :port udp-port 
+        msg {:message (nippy/freeze [(util/cpu-units) ip]) :port udp-port 
              :host (let [split (butlast (clojure.string/split ip #"\."))]
                      (str (clojure.string/join (interleave split (repeat (count split) "."))) "255"))}
         
@@ -110,7 +110,7 @@
                          
                  (w/outline :socket [] (fn [] (s/map (fn [x] (hash-map (:host x) x)) socket)))
                 
-                 (w/outline :result [:socket] (fn [x] (s/reduce merge (clone x))))
+                 (w/outline :result [:socket] (fn [x] (s/reduce merge (util/clone x))))
                 
                  (w/outline :accumulator [:accumulator :socket]                                 
                                  (fn 
@@ -157,6 +157,7 @@
     
     (s/put! client (pr-str [requires provides ip]))  
     
+    ; Server construction if this particular cpu wins the election.
     (if server      
       (let [woserver (dissoc server ::cleanup)        
             cs (keys woserver)
@@ -232,111 +233,115 @@
       
       ;#### Block until server is properly initialized ####
       
-      (println (b/convert @(s/take! client) String)))     
+      (println (b/convert @(s/take! client) String)))
     
-      (-> 
+    ; Construct the rest of the system and store structures into a map: {:client ... :system ...}
+    (-> 
       
-        (let [ret {:client client}]
-          (if server
-            (do
-              (->              
-                (assoc ret :server server)
-                (assoc :server-sys @server-sys)
-                (update-in [:server ::cleanup] (fn [x] (comp (fn [] (doseq [s (vals server)] (s/close! s))) x)))))
-            ret))
+      (let [ret {:client client}]
+        (if server
+          (do
+            (->              
+              (assoc ret :server server)
+              (assoc :server-sys @server-sys)
+              (update-in [:server ::cleanup] (fn [x] (comp (fn [] (doseq [s (vals server)] (s/close! s))) x)))))
+          ret))
         
-        (assoc :system 
+      (assoc :system 
                
-               (let [decoded-client (->> 
+             (let [decoded-client (->> 
                                                                                                                                                  
-                                      (decode-stream client frame)
+                                    (decode-stream client frame)
                                                                     
-                                      (s/filter not-empty)
+                                    (s/filter not-empty)
                                                                   
-                                      (s/map (fn [x] (read-string x))))
+                                    (s/map (fn [x] (read-string x))))
                      
-                     id (last (clojure.string/split ip #"\."))
+                   id (last (clojure.string/split ip #"\."))
                      
-                     hb-vector [:heartbeat id]
+                   hb-vector [:heartbeat id]
                      
-                     rec-id (keyword (str "heartbeat-received-" id))
+                   rec-id (keyword (str "heartbeat-received-" id))
                      
-                     status-map {:connection-status ::connected}         
+                   status-map {:connection-status ::connected}         
                      
-                     rs (let [required-streams (repeatedly (count requires) s/stream)]
-                          (if (empty? required-streams)
-                            []
-                            (mapv (fn [x y] (w/outline x [] (fn [] y))) 
-                                  requires 
-                                  (apply multiplex (clone decoded-client) (map (fn [x] (fn [[sndr val]] 
-                                                                                         (when (= sndr x)
-                                                                                           val))) 
-                                                                               requires)))))
+                   rs (let [required-streams (repeatedly (count requires) s/stream)]
+                        (if (empty? required-streams)
+                          []
+                          (mapv (fn [x y] (w/outline x [] (fn [] y))) 
+                                requires 
+                                (apply util/multiplex (util/clone decoded-client) (map (fn [x] (fn [[sndr val]] 
+                                                                                       (when (= sndr x)
+                                                                                         val))) 
+                                                                             requires)))))
                      
-                     ps (mapv (fn [p] (w/outline (make-key "providing-" p) [p]                                       
-                                                 (fn [stream] (s/map (fn [x] [p x]) stream))                                     
-                                                 :data-out)) 
+                   ps (mapv (fn [p] (w/outline (make-key "providing-" p) [p]                                       
+                                               (fn [stream] (s/map (fn [x] [p x]) stream))                                     
+                                               :data-out)) 
                    
-                             provides)
+                           provides)
                      
-                     hb-resp (if (= leader ip)
-                               [(w/outline :heartbeat-respond [:client]                                       
-                                           (fn [stream] (selector (fn [packet]                                                                          
-                                                                    (let [[sndr msg] packet]
-                                                                      (if (= sndr :heartbeat)                                                                   
-                                                                        (do
-                                                                          (println "Got heartbeat from " msg ", on server!")
-                                                                          [(keyword (str "heartbeat-received-" msg))])))) stream))                               
-                                           :data-out)]
-                               [])
+                   hb-resp (if (= leader ip)
+                             [(w/outline :heartbeat-respond [:client]                                       
+                                         (fn [stream] (util/selector (fn [packet]                                                                          
+                                                                  (let [[sndr msg] packet]
+                                                                    (if (= sndr :heartbeat)                                                                   
+                                                                      (do
+                                                                        (println "Got heartbeat from " msg ", on server!")
+                                                                        [(keyword (str "heartbeat-received-" msg))])))) stream))                               
+                                         :data-out)]
+                             [])
                      
-                     hb-cl (if (= leader ip)                       
-                             []
-                             [(w/outline :heartbeat []
-                                         (fn [] (s/periodically 5000 (fn [] hb-vector)))
-                                         :data-out)
+                   hb-cl (if (= leader ip)                       
+                           []
+                           [(w/outline :heartbeat []
+                                       (fn [] (s/periodically 5000 (fn [] hb-vector)))
+                                       :data-out)
                               
-                              (w/outline :heartbeat-receive 
-                                         [:client]
-                                         (fn [stream] 
-                                           (selector (fn [packet]                                                                                              
-                                                       (let [[sndr] packet]
-                                                         (if (= sndr rec-id)                                                                   
-                                                           (do
-                                                             (println "Got heartbeat on client!")
-                                                             status-map)))) 
-                                                     stream)))
+                            (w/outline :heartbeat-receive 
+                                       [:client]
+                                       (fn [stream] 
+                                         (util/selector (fn [packet]                                                                                              
+                                                     (let [[sndr] packet]
+                                                       (if (= sndr rec-id)                                                                   
+                                                         (do
+                                                           (println "Got heartbeat on client!")
+                                                           status-map)))) 
+                                                   stream)))
                               
-                              (w/outline 
-                                :heartbeat-status 
-                                [:heartbeat-receive]                      
-                                (fn [stream] (take-within identity stream 20000 {:connection-status ::disconnected})))
+                            (w/outline 
+                              :heartbeat-status 
+                              [:heartbeat-receive]                      
+                              (fn [stream] (util/take-within identity stream 20000 {:connection-status ::disconnected})))
                               
-                              (w/outline :heartbeat-watch [:heartbeat-status [:all :without [:heartbeat-watch]]]
-                                         (fn [stream & streams] 
-                                           (s/consume (fn [x] 
-                                                        (if (= (:connection-status x) ::disconnected)
-                                                          (doall (map #(if (s/stream? %) (s/close! %)) streams)))) 
-                                                      (clone stream))))
+                            (w/outline :heartbeat-watch [:heartbeat-status [:all :without [:heartbeat-watch]]]
+                                       (fn [stream & streams] 
+                                         (s/consume (fn [x] 
+                                                      (if (= (:connection-status x) ::disconnected)
+                                                        (doall (map #(if (s/stream? %) (s/close! %)) streams)))) 
+                                                    (util/clone stream))))
                               
-                              (w/outline
-                                 :system-status
-                                 ;Change this to get a bunch of data...
-                                 [:heartbeat-status]
-                                 (fn [stream] (s/reduce merge (clone stream))))])]               
+                            (w/outline
+                               :system-status
+                               ;Change this to get a bunch of data...
+                               [:heartbeat-status]
+                               (fn [stream] (s/reduce merge (util/clone stream))))])
+                   
+                   ; Matlab plugin here! Have an option to enable.
+                   ]               
                  
-                 (->>
+               (->>
                    
-                   (concat rs ps hb-resp hb-cl)
+                 (concat rs ps hb-resp hb-cl)
                    
-                   (cons (w/outline :client [] (fn [] decoded-client)))    
+                 (cons (w/outline :client [] (fn [] decoded-client)))    
                    
-                   (cons (w/outline :out 
-                                     [[:data-out]] 
-                                     (fn 
-                                       [& streams] 
-                                       (doseq [s streams] 
-                                         (s/connect-via s (fn [x] (d/zip (doall (map #(s/put! client %) (encode' x))))) client)))))))))))
+                 (cons (w/outline :out 
+                                   [[:data-out]] 
+                                   (fn 
+                                     [& streams] 
+                                     (doseq [s streams] 
+                                       (s/connect-via s (fn [x] (d/zip (doall (map #(s/put! client %) (encode' x))))) client)))))))))))
 
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 
