@@ -125,5 +125,9 @@
                                                                   (re-find #"\d+\.\d+" (second (clojure.string/split (:machdep.cpu.brand_string cpu-map) #"\w*@\s")))))
                                                    num-cores (read-string (:machdep.cpu.core_count cpu-map))]
                                                (list proc-speed -1 num-cores)) 
+                         (is-os? "Windows 7") (let [num-cores (.availableProcessors (java.lang.Runtime/getRuntime))
+                                                    proc-speed(read-string(re-find #"\d+" (:out (shell/sh "cmd" "/C" "wmic" "cpu" "get" "CurrentClockSpeed"))))]
+                                                (list proc-speed -1 num-cores))
                          :else (list 1 1 1))] ; For non-supported os, returns 1.
+    
     (* (first result) (last result))))

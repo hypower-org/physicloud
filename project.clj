@@ -14,4 +14,5 @@
                  [byte-streams "0.2.0-alpha4"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [gloss "0.2.4"]
-                 [org.clojure/data.int-map "0.1.0"]])
+                 [org.clojure/data.int-map "0.1.0"]]
+  :java-source-paths ["src/physicloud/PhysiCloudClient"])

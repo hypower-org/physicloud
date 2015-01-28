@@ -5,5 +5,32 @@
             [byte-streams :as b]
             [watershed.core :as w]))
 
+(import '(java.net ServerSocket Socket SocketException)
+        '(java.io ObjectOutputStream ObjectInputStream))
+
 ; This namespace contains the functionality to construct the interface to the Matlab Java client. It facilitates
 ; the programming of the PhysiCloud enabled CPS through Matlab.
+
+(def port 8756)
+(def server (new ServerSocket port))
+
+(defn accept-connection []
+  (try (. server accept)
+       (catch SocketException e)))
+
+(defn cmd-handler [in]
+  (future
+    (loop []
+      (let [cmd (. in readObject)]
+        (println "Command received from matlab: " cmd))
+        (recur))))
+
+(defn start-server []
+  (let [client (accept-connection)
+        out (new ObjectOutputStream (. client getOutputStream))
+        in (new ObjectInputStream (. client getInputStream))]
+    (println "Connected, sending data...")
+    (cmd-handler in)
+    (loop[x 0]
+      (. out writeObject (java.util.HashMap. {"x" (rand) "y" (rand) "theta" (double x)}))
+      (recur (inc x)))))
