@@ -104,20 +104,20 @@
         
         system (assemble-phy
                 
-                 (w/outline :broadcast [] (fn [] (s/periodically udp-interval (fn [] msg))))
+                 (w/vertex :broadcast [] (fn [] (s/periodically udp-interval (fn [] msg))))
                 
-                 (w/outline :connect [:broadcast] (fn [stream] (s/connect stream socket)))
+                 (w/vertex :connect [:broadcast] (fn [stream] (s/connect stream socket)))
                          
-                 (w/outline :socket [] (fn [] (s/map (fn [x] (hash-map (:host x) x)) socket)))
+                 (w/vertex :socket [] (fn [] (s/map (fn [x] (hash-map (:host x) x)) socket)))
                 
-                 (w/outline :result [:socket] (fn [x] (s/reduce merge (util/clone x))))
+                 (w/vertex :result [:socket] (fn [x] (s/reduce merge (util/clone x))))
                 
-                 (w/outline :accumulator [:accumulator :socket]                                 
+                 (w/vertex :accumulator [:accumulator :socket]                                 
                                  (fn 
                                    ([] {})
                                    ([& streams] (s/map acc-fn (apply s/zip streams)))))
                            
-                 (w/outline :watch [:accumulator [:all :without [:watch]]] (fn [stream & streams] (s/consume #(watch-fn streams % number-of-neighbors) (s/map identity stream)))))]
+                 (w/vertex :watch [:accumulator [:all :without [:watch]]] (fn [stream & streams] (s/consume #(watch-fn streams % number-of-neighbors) (s/map identity stream)))))]
     
     (reduce (fn [max [k v]]  
               (let [[v' l'] (defrost (:message v))]
@@ -177,14 +177,14 @@
                                      
                                                  (mapcat (fn [x]                                                                                           
                                                
-                                                           [(w/outline (make-key "providing-" x) []
+                                                           [(w/vertex (make-key "providing-" x) []
                                                                        (fn []                                            
                                                                          (->> 
                                                                            (decode-stream (get server (name x)) frame)                                                                  
                                                                            (s/filter not-empty)
                                                                            (s/map (fn [x] (read-string x))))))       
                                                 
-                                                            (w/outline (make-key "receiving-" x)
+                                                            (w/vertex (make-key "receiving-" x)
                                                                        (->> 
                                                                          (let [pred (set (:requires (get connections x)))]
                                                                            (reduce (fn [coll r] 
@@ -204,14 +204,14 @@
                                                                            (s/connect-via intermediate (fn [x] (d/zip (doall (map #(s/put! recipient %) x)))) recipient))))])
                                                          cs')
                                      
-                                                 (cons (w/outline (make-key "providing-" leader) [] 
+                                                 (cons (w/vertex (make-key "providing-" leader) [] 
                                                                   (fn []                                            
                                                                     (->> 
                                                                       (decode-stream (get server leader) frame)                                                                  
                                                                       (s/filter not-empty)
                                                                       (s/map (fn [x] (read-string x)))))))
                                      
-                                                 (cons (w/outline (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
+                                                 (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
                                                                   (fn [& streams] 
                                                                     (let [recipient (get server leader)                                                  
                                                                           intermediate (s/stream)]
@@ -268,21 +268,21 @@
                    rs (let [required-streams (repeatedly (count requires) s/stream)]
                         (if (empty? required-streams)
                           []
-                          (mapv (fn [x y] (w/outline x [] (fn [] y))) 
+                          (mapv (fn [x y] (w/vertex x [] (fn [] y))) 
                                 requires 
                                 (apply util/multiplex (util/clone decoded-client) (map (fn [x] (fn [[sndr val]] 
                                                                                        (when (= sndr x)
                                                                                          val))) 
                                                                              requires)))))
                      
-                   ps (mapv (fn [p] (w/outline (make-key "providing-" p) [p]                                       
+                   ps (mapv (fn [p] (w/vertex (make-key "providing-" p) [p]                                       
                                                (fn [stream] (s/map (fn [x] [p x]) stream))                                     
                                                :data-out)) 
                    
                            provides)
                      
                    hb-resp (if (= leader ip)
-                             [(w/outline :heartbeat-respond [:client]                                       
+                             [(w/vertex :heartbeat-respond [:client]                                       
                                          (fn [stream] (util/selector (fn [packet]                                                                          
                                                                   (let [[sndr msg] packet]
                                                                     (if (= sndr :heartbeat)                                                                   
@@ -294,11 +294,11 @@
                      
                    hb-cl (if (= leader ip)                       
                            []
-                           [(w/outline :heartbeat []
+                           [(w/vertex :heartbeat []
                                        (fn [] (s/periodically 5000 (fn [] hb-vector)))
                                        :data-out)
                               
-                            (w/outline :heartbeat-receive 
+                            (w/vertex :heartbeat-receive 
                                        [:client]
                                        (fn [stream] 
                                          (util/selector (fn [packet]                                                                                              
@@ -309,19 +309,19 @@
                                                            status-map)))) 
                                                    stream)))
                               
-                            (w/outline 
+                            (w/vertex 
                               :heartbeat-status 
                               [:heartbeat-receive]                      
                               (fn [stream] (util/take-within identity stream 20000 {:connection-status ::disconnected})))
                               
-                            (w/outline :heartbeat-watch [:heartbeat-status [:all :without [:heartbeat-watch]]]
+                            (w/vertex :heartbeat-watch [:heartbeat-status [:all :without [:heartbeat-watch]]]
                                        (fn [stream & streams] 
                                          (s/consume (fn [x] 
                                                       (if (= (:connection-status x) ::disconnected)
                                                         (doall (map #(if (s/stream? %) (s/close! %)) streams)))) 
                                                     (util/clone stream))))
                               
-                            (w/outline
+                            (w/vertex
                                :system-status
                                ;Change this to get a bunch of data...
                                [:heartbeat-status]
@@ -334,9 +334,9 @@
                    
                  (concat rs ps hb-resp hb-cl)
                    
-                 (cons (w/outline :client [] (fn [] decoded-client)))    
+                 (cons (w/vertex :client [] (fn [] decoded-client)))    
                    
-                 (cons (w/outline :out 
+                 (cons (w/vertex :out 
                                    [[:data-out]] 
                                    (fn 
                                      [& streams] 
