@@ -47,7 +47,7 @@
 
 (phy/assemble-phy    
   
-  (w/outline :odom 
+  (w/vertex :odom 
              [] 
              (fn [] 
                (s/periodically 
@@ -57,20 +57,20 @@
                               cur-sec  (.getSeconds (now))] 
                           [(double cur-hour ) (double cur-min) (double cur-sec)])))))
   
-  (w/outline :matlab-cmd 
+  (w/vertex :matlab-cmd 
              [] 
              (fn [] (s/->source (repeatedly (fn [] (to-clj-map (. in readObject)))))))
   
-  (w/outline :state 
+  (w/vertex :state 
              [:odom] 
              (fn [odom-stream] (s/map (fn [[x y theta]] {:x x :y y :theta theta}) odom-stream )))
   
-  (w/outline :matlab-push 
+  (w/vertex :matlab-push 
              [:state] 
              (fn [state-stream] (s/consume (fn [state-map] (println "Server: pushing data")
                                              (push-data (:x state-map) (:y state-map) (:theta state-map))) state-stream)))
   
-  (w/outline :kobuki-controller 
+  (w/vertex :kobuki-controller 
              [:matlab-cmd] 
              (fn [cmd-stream]  
                (s/consume 
