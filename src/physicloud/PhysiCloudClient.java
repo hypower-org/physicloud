@@ -5,6 +5,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PhysiCloudClient {
@@ -26,7 +27,7 @@ public class PhysiCloudClient {
 				while(!stopRequested){
 					getPCData();
 					try{
-						Thread.sleep(50);
+						Thread.sleep(100);
 					}catch(InterruptedException e){
 						System.out.println("Physicould client terminated");
 						Thread.currentThread().interrupt();
@@ -39,7 +40,7 @@ public class PhysiCloudClient {
 	}
 	
 	//method for gracefully ending worker thread
-	public void requestStop(){
+	public void stopPC(){
 		stopRequested = true;
 		if(worker != null){
 			worker.interrupt();
@@ -47,7 +48,7 @@ public class PhysiCloudClient {
 	}
 	
 	//method to receive data from physicloud network and update
-	//concurrent data structure (synchronized for atomicity)
+	//concurrent data structure
 	@SuppressWarnings("unchecked")
 	private void getPCData() {
 		try {
@@ -79,9 +80,53 @@ public class PhysiCloudClient {
 		return data;
 	}
 	
+	@Deprecated
 	//method for MATLAB users to send commands to physicloud
-	public void cmd(String cmd){
-		try {out.writeObject(cmd);} 
+	public void cmd(Object cmd){
+		try {
+			out.writeObject(cmd);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	//method for MATLAB users to send a "go-to" command to a variable number of robots
+	public void goTo(String[] robotIds, Double[] xVals, Double[] yVals){
+		HashMap<String, Object> locationMap = new HashMap<String, Object>();
+		for (int i = 0; i < robotIds.length; i++){
+			Vector<Double> locations =  new Vector<Double>(2);
+			locations.add(0, xVals[i]);
+			locations.add(1, yVals[i]);
+			locationMap.put(robotIds[i], locations);
+		}
+		locationMap.put("command", "go-to");
+		try {
+			out.writeObject(locationMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	//method for MATLAB users to stop all robots' movement
+	public void stop(){
+		HashMap<String, Object> stopMap = new HashMap<String, Object>();
+		stopMap.put("command", "stop");
+		try {
+			out.writeObject(stopMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	//method for MATLAB users to stop a given set of robots' movement
+	public void stop(String[] robotIds){
+		HashMap<String, Object> stopMap = new HashMap<String, Object>();
+		stopMap.put("command", "stop");
+		Vector<String> ids =  new Vector<String>();
+		for (int i = 0; i < robotIds.length; i++){
+			ids.add(robotIds[i]);
+		}
+		stopMap.put("ids", ids);
+		try {
+			out.writeObject(stopMap);
+		} 
 		catch (IOException e) {e.printStackTrace();}
 	}
 }

@@ -11,10 +11,7 @@
 ; This namespace contains the functionality to construct the interface to the Matlab Java client. It facilitates
 ; the programming of the PhysiCloud enabled CPS through Matlab.
 
-(def port 8756)
-(def server (new ServerSocket port))
-
-(defn accept-connection []
+(defn connect [server]
   (try (. server accept)
        (catch SocketException e)))
 
@@ -26,7 +23,8 @@
         (recur))))
 
 (defn start-server []
-  (let [client (accept-connection)
+  (let [server (new ServerSocket 8756)
+        client (connect server)
         out (new ObjectOutputStream (. client getOutputStream))
         in (new ObjectInputStream (. client getInputStream))]
     (println "Connected, sending data...")

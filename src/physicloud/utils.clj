@@ -121,8 +121,8 @@
                          ; Need machdep.cpu.core_count and machdep.cpu.brand_string
                          (is-os? "Mac OS X") (let [cpu-map (macos-cpu-map)
                                                    proc-speed (* 1000
-                                                                 (read-string ; Number returned in GHz. Base unit across cyber-physical units is MHz.
-                                                                  (re-find #"\d+\.\d+" (second (clojure.string/split (:machdep.cpu.brand_string cpu-map) #"\w*@\s")))))
+                                                               (read-string ; Number returned in GHz. Base unit across cyber-physical units is MHz.
+                                                                (re-find #"\d+\.\d+" (second (clojure.string/split (:machdep.cpu.brand_string cpu-map) #"\w*@\s")))))
                                                    num-cores (read-string (:machdep.cpu.core_count cpu-map))]
                                                (list proc-speed -1 num-cores)) 
                          (is-os? "Windows 7") (let [num-cores (.availableProcessors (java.lang.Runtime/getRuntime))
