@@ -16,11 +16,11 @@ public class PhysiCloudClient {
 	private Socket pcClient; //client socket for communication with Physicloud network over TCP
 	private ObjectOutputStream out; //object out stream for reading objects from the Physicloud network
 	private ObjectInputStream in;  //object in stream for writing objects to the Physicloud network
-	private ConcurrentHashMap<String, Double> currentData;  //concurrent map for incoming data
+	private ConcurrentHashMap<String, Object> currentData;  //concurrent map for incoming data
 	
 	//constructor - start worker thread in boolean-dependent loop
 	public PhysiCloudClient(){
-		currentData = new ConcurrentHashMap<String, Double>();
+		currentData = new ConcurrentHashMap<String, Object>();
 		stopRequested = false;
 		worker = new Thread(){
 			public void run(){
@@ -52,7 +52,7 @@ public class PhysiCloudClient {
 	@SuppressWarnings("unchecked")
 	private void getPCData() {
 		try {
-			HashMap<String, Double> dataIn = (HashMap<String, Double>) in.readObject();
+			HashMap<String, Object> dataIn = (HashMap<String, Object>) in.readObject();
 			currentData.putAll(dataIn);
 		}
 		catch (ClassNotFoundException e) {e.printStackTrace();}
@@ -69,6 +69,7 @@ public class PhysiCloudClient {
 		catch (IOException e) {e.printStackTrace();}
 	}
 	
+	@Deprecated
 	//method for MATLAB users to retrieve data
 	public Double[] pullData(){
 		Double[] data = new Double[3];
@@ -87,6 +88,24 @@ public class PhysiCloudClient {
 			out.writeObject(cmd);
 		} 
 		catch (IOException e) {e.printStackTrace();}
+	}
+	//method for MATLAB users to get the state data of
+	// a particular robot
+	@SuppressWarnings("unchecked")
+	public Double[] getData(String id){
+		Double[] data = new Double[3];
+		if(currentData != null){
+			if(currentData.containsKey(id)){
+				Vector<Object> robotState = (Vector<Object>) currentData.get(id);
+				data[0] = (Double) robotState.get(0);
+				data[1] = (Double) robotState.get(1);
+				data[2] = (Double) robotState.get(2);
+			}
+			else{
+				System.out.println("Error: Robot with that ID does not exist");
+			}
+		}
+		return data;		
 	}
 	
 	//method for MATLAB users to send a "go-to" command to a variable number of robots

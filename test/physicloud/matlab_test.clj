@@ -6,11 +6,12 @@
             [physicloud.gt-math :as math])
   (:use [physicloud.utils])
   (:import [java.net ServerSocket Socket SocketException]
-           [java.io ObjectOutputStream ObjectInputStream]))
+           [java.io ObjectOutputStream ObjectInputStream]
+           [com.phidgets SpatialPhidget]))
 
 (def last-cmd (atom nil))
 
-(defn now [] (new java.util.Date))
+(defn- now [] (new java.util.Date))
 
 (defn cmd-handler [in]
   (future
@@ -43,11 +44,18 @@
                      j-vec)) 
                  (vals clj-m)))))
 
+(def spacial (new SpatialPhidget))
+
+(defn connect-imu []
+  (.openAny spacial)
+  (.waitForAttachment spacial))
+
+
 (start-server)
 
 (phy/assemble-phy    
   
-  (w/vertex :odom 
+  (w/vertex :odom ;;currently sending random time data
              [] 
              (fn [] 
                (s/periodically 
@@ -56,6 +64,16 @@
                               cur-min  (.getMinutes (now))
                               cur-sec  (.getSeconds (now))] 
                           [(double cur-hour ) (double cur-min) (double cur-sec)])))))
+  
+;  (w/vertex :imu
+;             [] 
+;             (fn [] 
+;               (s/periodically 
+;                 1000 
+;                 (fn [] (let [a-x (.getAcceleration spacial 0)
+;                              a-y (.getAcceleration spacial 1)
+;                              w (.getAngularRate spacial 2)] 
+;                          [(double a-x ) (double a-y) (double a-theta)])))))
   
   (w/vertex :matlab-cmd 
              [] 

@@ -11,24 +11,32 @@
 ; This namespace contains the functionality to construct the interface to the Matlab Java client. It facilitates
 ; the programming of the PhysiCloud enabled CPS through Matlab.
 
-(defn connect [server]
+(defn- connect [server]
+  (println "Waiting for matlab client to connect")
   (try (. server accept)
        (catch SocketException e)))
 
-(defn cmd-handler [in]
-  (future
-    (loop []
-      (let [cmd (. in readObject)]
-        (println "Command received from matlab: " cmd))
-        (recur))))
-
 (defn start-server []
+  (println "Starting server...")
   (let [server (new ServerSocket 8756)
-        client (connect server)
-        out (new ObjectOutputStream (. client getOutputStream))
-        in (new ObjectInputStream (. client getInputStream))]
-    (println "Connected, sending data...")
-    (cmd-handler in)
-    (loop[x 0]
-      (. out writeObject (java.util.HashMap. {"x" (rand) "y" (rand) "theta" (double x)}))
-      (recur (inc x)))))
+        client (connect server)]
+    (def out (new ObjectOutputStream (. client getOutputStream)))
+    (def in (new ObjectInputStream (. client getInputStream)))
+    (println "Connected to matlab physiclient")))
+
+;;this functionality is not yet implemented
+(defn push-data [x y theta]
+  (. out writeObject (java.util.HashMap. {"x" x "y" y "theta" theta}))) 
+
+
+(defn to-clj-map [m]
+  (let [clj-m (into {} m)]
+    (zipmap (map keyword (keys clj-m)) 
+            (map (fn [j-vec] 
+                   (if-not (string? j-vec) 
+                     (into [] j-vec) 
+                     j-vec)) 
+                 (vals clj-m)))))
+
+(defn key-to-string [key]
+  (reduce str (rest (str key))))

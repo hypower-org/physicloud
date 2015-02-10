@@ -60,7 +60,8 @@
          
          {:ip ip
           :neighbors 2
-          :requires [:position] :provides []}
+          :requires [:position] 
+          :provides []}
          
          (w/outline :encoders [] (fn [] (s/periodically 100 (fn [] [(.getLeftEncoder robot) (.getRightEncoder robot)]))))
    
