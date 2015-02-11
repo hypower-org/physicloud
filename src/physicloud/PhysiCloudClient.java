@@ -40,7 +40,7 @@ public class PhysiCloudClient {
 	}
 	
 	//method for gracefully ending worker thread
-	public void stopPC(){
+	public void kill(){
 		stopRequested = true;
 		if(worker != null){
 			worker.interrupt();
@@ -92,14 +92,14 @@ public class PhysiCloudClient {
 	//method for MATLAB users to get the state data of
 	// a particular robot
 	@SuppressWarnings("unchecked")
-	public Double[] getData(String id){
-		Double[] data = new Double[3];
+	public Long[] getData(String id){
+		Long[] data = new Long[3];
 		if(currentData != null){
 			if(currentData.containsKey(id)){
 				Vector<Object> robotState = (Vector<Object>) currentData.get(id);
-				data[0] = (Double) robotState.get(0);
-				data[1] = (Double) robotState.get(1);
-				data[2] = (Double) robotState.get(2);
+				data[0] = (Long) robotState.get(0);
+				data[1] = (Long) robotState.get(1);
+				data[2] = (Long) robotState.get(2);
 			}
 			else{
 				System.out.println("Error: Robot with that ID does not exist");

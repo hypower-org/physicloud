@@ -7,7 +7,7 @@
   (:use [physicloud.utils])
   (:import [java.net ServerSocket Socket SocketException]
            [java.io ObjectOutputStream ObjectInputStream]
-           [com.phidgets SpatialPhidget]))
+          ))
 
 (def last-cmd (atom nil))
 
@@ -32,8 +32,12 @@
     (def in (new ObjectInputStream (. client getInputStream)))
     (println "Connected to matlab physiclient")))
 
-(defn push-data [x y theta]
-  (. out writeObject (java.util.HashMap. {"x" x "y" y "theta" theta}))) 
+(defn push-data []
+  (. out writeObject 
+    (java.util.HashMap. 
+      {"robot1" (java.util.Vector. [1 2 3]) 
+       "robot2" (java.util.Vector. [1 2 3]) 
+       "robot3" (java.util.Vector. [1 2 3])})))
 
 (defn to-clj-map [m]
   (let [clj-m (into {} m)]
@@ -43,13 +47,6 @@
                      (into [] j-vec) 
                      j-vec)) 
                  (vals clj-m)))))
-
-(def spacial (new SpatialPhidget))
-
-(defn connect-imu []
-  (.openAny spacial)
-  (.waitForAttachment spacial))
-
 
 (start-server)
 
@@ -65,16 +62,6 @@
                               cur-sec  (.getSeconds (now))] 
                           [(double cur-hour ) (double cur-min) (double cur-sec)])))))
   
-;  (w/vertex :imu
-;             [] 
-;             (fn [] 
-;               (s/periodically 
-;                 1000 
-;                 (fn [] (let [a-x (.getAcceleration spacial 0)
-;                              a-y (.getAcceleration spacial 1)
-;                              w (.getAngularRate spacial 2)] 
-;                          [(double a-x ) (double a-y) (double a-theta)])))))
-  
   (w/vertex :matlab-cmd 
              [] 
              (fn [] (s/->source (repeatedly (fn [] (to-clj-map (. in readObject)))))))
@@ -85,8 +72,8 @@
   
   (w/vertex :matlab-push 
              [:state] 
-             (fn [state-stream] (s/consume (fn [state-map] (println "Server: pushing data")
-                                             (push-data (:x state-map) (:y state-map) (:theta state-map))) state-stream)))
+             (fn [state-stream] (s/consume (fn [state-map] ;(println "Server: pushing data")
+                                             (push-data)) state-stream)))
   
   (w/vertex :kobuki-controller 
              [:matlab-cmd] 
