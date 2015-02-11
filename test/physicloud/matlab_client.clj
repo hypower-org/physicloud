@@ -39,7 +39,7 @@
                        :x (:start-x properties)
                        :y (:start-y properties) 
                        :t (:start-t properties)}))
-(def go-to (atom nil))
+(def go-to-coords (atom nil))
 (def stop? (atom false))
 
 (defn value-change [new-value, old-value] 
@@ -123,7 +123,7 @@
 
 
 (defn go-to [gtx gty]
-  (if (or @stop? (nil? @go-to))
+  (if (or @stop? (nil? @go-to-coords))
     ;if robot hasnt yet been told a place to go,
     ;or it received a stop command, stop movement 
     (.control robot 0 0)
@@ -231,7 +231,7 @@
       (= cmd "go-to")
       (let [my-id-key (:id properties)
             coords    (my-id-key cmd-map)]
-        (reset! go-to coords))
+        (reset! go-to-coords coords))
       
       (= cmd "stop")
       (let[ids (get cmd-map "ids")
@@ -247,7 +247,7 @@
 
 (defn gtg-handler []
   (loop []
-    (if @go-to  (go-to (get @go-to 0)(get @go-to 1)))
+    (if @go-to-coords  (go-to (get @go-to-coords 0)(get @go-to-coords 1)))
     (Thread/sleep 100)
     (recur)))
 

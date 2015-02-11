@@ -9,8 +9,6 @@
   (:import [java.net ServerSocket Socket SocketException]
            [java.io ObjectOutputStream ObjectInputStream]))
 
-
-
 (defn -main 
   [ip]
   
