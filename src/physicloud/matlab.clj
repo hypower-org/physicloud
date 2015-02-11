@@ -24,10 +24,8 @@
     (def in (new ObjectInputStream (. client getInputStream)))
     (println "Connected to matlab physiclient")))
 
-;;this functionality is not yet implemented
-(defn push-data [x y theta]
-  (. out writeObject (java.util.HashMap. {"x" x "y" y "theta" theta}))) 
-
+(defn write-data [state-map]
+  (. out writeObject state-map)) 
 
 (defn to-clj-map [m]
   (let [clj-m (into {} m)]
