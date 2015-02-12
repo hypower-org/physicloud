@@ -255,17 +255,19 @@
 
  (phy/physicloud-instance
         {:ip (:ip properties)
-         :neighbors 3
-         :requires [:matlab-cmd] 
+         :neighbors 2;4
+;         :requires [:matlab-cmd] 
+         :requires [] 
                     ;provides either state1, state2, or state3
          :provides [(keyword (str "state" (last (str (:id properties)))))]}
   
    (w/vertex :control  
-              [:matlab-cmd] 
+             ; [:matlab-cmd] 
+              [(keyword (str "state" (last (str (:id properties)))))] 
               (fn [cmd-stream]
-                (s/consume 
-                  (fn [cmd-map] (cmd-handler cmd-map)
-                  cmd-stream))))
+                #_(s/consume 
+                   (fn [cmd-map] (cmd-handler cmd-map)
+                   cmd-stream))))
     
              ;this vertex is either :state1, :state2, or :state3
    (w/vertex (keyword (str "state" (last (str (:id properties)))))
@@ -273,15 +275,7 @@
               (fn [] 
                 (s/periodically 
                   100 
-                  (fn [] [(:x last-state) (:y last-state) (:t last-state)]))))
-  
-   (w/vertex :matlab-push 
-             [:system-state] 
-             (fn [state-stream] 
-               (s/consume 
-                 (fn [state-map] 
-                   (ml/write-data state-map))
-                 state-stream))))
+                  (fn [] [(:x last-state) (:y last-state) (:t last-state)])))))
  
  (future location-tracker)
  (future gtg-handler))

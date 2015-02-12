@@ -12,5 +12,5 @@
      :neighbors 2 
      :requires [] :provides [:position]}
     
-    (w/outline :position [] (fn [] (s/->source (map (fn [x] (mapv read-string (clojure.string/split x #"\s+"))) (take-while #(not= % "quit!") (repeatedly read-line))))))))
+    (w/vertex :position [] (fn [] (s/->source (map (fn [x] (mapv read-string (clojure.string/split x #"\s+"))) (take-while #(not= % "quit!") (repeatedly read-line))))))))
 

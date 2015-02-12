@@ -162,67 +162,67 @@
       (let [woserver (dissoc server ::cleanup)        
             cs (keys woserver)
             ss (vals woserver)]        
-           
-        (reset! server-sys @(d/chain (apply d/zip (map s/take! ss)) 
+        (println "starting up server")  
+        (reset! server-sys (d/chain (apply d/zip (map s/take! ss)) 
                  
-                                   (fn [responses] 
+                                  (fn [responses] 
                                      
-                                     (let [connections (doall (map (fn [r] (apply hash-map (doall (interleave [:requires :provides :ip] 
-                                                                                                              (read-string (b/convert r String))))))                                                                
-                                                                     responses))
+                                    (let [connections (doall (map (fn [r] (apply hash-map (doall (interleave [:requires :provides :ip] 
+                                                                                                             (read-string (b/convert r String))))))                                                                
+                                                                    responses))
                          
-                                           cs' (mapv keyword (remove #(= leader %) cs))
+                                          cs' (mapv keyword (remove #(= leader %) cs))
                                            
-                                           sys (->> 
+                                          sys (->> 
                                      
-                                                 (mapcat (fn [x]                                                                                           
+                                                (mapcat (fn [x]                                                                                           
                                                
-                                                           [(w/vertex (make-key "providing-" x) []
-                                                                       (fn []                                            
-                                                                         (->> 
-                                                                           (decode-stream (get server (name x)) frame)                                                                  
-                                                                           (s/filter not-empty)
-                                                                           (s/map (fn [x] (read-string x))))))       
+                                                          [(w/vertex (make-key "providing-" x) []
+                                                                      (fn []                                            
+                                                                        (->> 
+                                                                          (decode-stream (get server (name x)) frame)                                                                  
+                                                                          (s/filter not-empty)
+                                                                          (s/map (fn [x] (read-string x))))))       
                                                 
-                                                            (w/vertex (make-key "receiving-" x)
-                                                                       (->> 
-                                                                         (let [pred (set (:requires (get connections x)))]
-                                                                           (reduce (fn [coll r] 
-                                                                                     (if (some pred (:provides (get connections r)))
-                                                                                       (conj coll (make-key "providing-" r))
-                                                                                       coll)) 
-                                                                                   []
-                                                                                   cs'))
-                                                                         (cons (make-key "providing-" leader))
-                                                                         distinct
-                                                                         vec)
-                                                                       (fn [& streams] 
-                                                                         (let [recipient (get server (name x))                                                  
-                                                                          intermediate (s/stream)]
-                                                                           (doseq [s streams] 
-                                                                             (s/connect-via s (fn [x] (s/put! intermediate (encode' x))) intermediate))
-                                                                           (s/connect-via intermediate (fn [x] (d/zip (doall (map #(s/put! recipient %) x)))) recipient))))])
-                                                         cs')
+                                                           (w/vertex (make-key "receiving-" x)
+                                                                      (->> 
+                                                                        (let [pred (set (:requires (get connections x)))]
+                                                                          (reduce (fn [coll r] 
+                                                                                    (if (some pred (:provides (get connections r)))
+                                                                                      (conj coll (make-key "providing-" r))
+                                                                                      coll)) 
+                                                                                  []
+                                                                                  cs'))
+                                                                        (cons (make-key "providing-" leader))
+                                                                        distinct
+                                                                        vec)
+                                                                      (fn [& streams] 
+                                                                        (let [recipient (get server (name x))                                                  
+                                                                         intermediate (s/stream)]
+                                                                          (doseq [s streams] 
+                                                                            (s/connect-via s (fn [x] (s/put! intermediate (encode' x))) intermediate))
+                                                                          (s/connect-via intermediate (fn [x] (apply d/zip (doall (map #(s/put! recipient %) x)))) recipient))))])
+                                                        cs')
                                      
-                                                 (cons (w/vertex (make-key "providing-" leader) [] 
-                                                                  (fn []                                            
-                                                                    (->> 
-                                                                      (decode-stream (get server leader) frame)                                                                  
-                                                                      (s/filter not-empty)
-                                                                      (s/map (fn [x] (read-string x)))))))
+                                                (cons (w/vertex (make-key "providing-" leader) [] 
+                                                                 (fn []                                            
+                                                                   (->> 
+                                                                     (decode-stream (get server leader) frame)                                                                  
+                                                                     (s/filter not-empty)
+                                                                     (s/map (fn [x] (read-string x)))))))
                                      
-                                                 (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
-                                                                  (fn [& streams] 
-                                                                    (let [recipient (get server leader)                                                  
-                                                                          intermediate (s/stream)]
-                                                                      (doseq [s streams] 
-                                                                        (s/connect-via s (fn [x] (s/put! intermediate (encode' x))) intermediate))
-                                                                      (s/connect-via intermediate (fn [x] (d/zip (doall (map #(s/put! recipient %) x)))) recipient))))))] 
+                                                (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
+                                                                 (fn [& streams] 
+                                                                   (let [recipient (get server leader)                                                  
+                                                                         intermediate (s/stream)]
+                                                                     (doseq [s streams] 
+                                                                       (s/connect-via s (fn [x] (s/put! intermediate (encode' x))) intermediate))
+                                                                     (s/connect-via intermediate (fn [x] (apply d/zip (doall (map #(s/put! recipient %) x)))) recipient))))))] 
                                        
-                                       ;generate dependencies!
+                                      ;generate dependencies!
                      
-                                       (apply assemble-phy sys)))))
-        
+                                      (apply assemble-phy sys)))))
+        (println "server constructed")
         ;#### Let all the clients know that everything is connected
         
         (doseq [c cs]
@@ -341,7 +341,7 @@
                                    (fn 
                                      [& streams] 
                                      (doseq [s streams] 
-                                       (s/connect-via s (fn [x] (d/zip (doall (map #(s/put! client %) (encode' x))))) client)))))))))))
+                                       (s/connect-via s (fn [x] (apply d/zip (doall (map #(s/put! client %) (encode' x))))) client)))))))))))
 
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 
