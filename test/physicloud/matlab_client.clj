@@ -123,11 +123,11 @@
 
 
 (defn go-to [gtx gty]
-  (if (or @stop? (nil? @go-to-coords))
-    ;if robot hasnt yet been told a place to go,
-    ;or it received a stop command, stop movement 
+  (if @stop?
+    ;if robot received a stop command, stop movement 
     (.control robot 0 0)
       
+    ;else-
     (let [x-dif (- gtx (:x @last-state))
           y-dif (- gty (:y @last-state))
           o-x (if (>= x-dif 0) :east :west)
@@ -227,6 +227,7 @@
   
 (defn cmd-handler [cmd-map]
   (let [cmd (:command cmd-map)]
+    (println "COMMAND RECEIVED: " cmd)
     (cond 
       (= cmd "go-to")
       (let [my-id-key (:id properties)
@@ -247,38 +248,37 @@
 
 (defn gtg-handler []
   (loop []
-    (if @go-to-coords  (go-to (get @go-to-coords 0)(get @go-to-coords 1)))
-    (Thread/sleep 100)
+    (if @go-to-coords  
+      (do (println "sending command to go to " @go-to-coords)
+        (go-to (get @go-to-coords 0)(get @go-to-coords 1))))
+    
+    (Thread/sleep 100) 
     (recur)))
 
 (defn -main []
-
- (phy/physicloud-instance
-        {:ip (:ip properties)
-         :neighbors 2;4
-;         :requires [:matlab-cmd] 
-         :requires [] 
-                    ;provides either state1, state2, or state3
-         :provides [(keyword (str "state" (last (str (:id properties)))))]}
+ (future (location-tracker))
+ (future (gtg-handler))
+ (future (phy/physicloud-instance
+              {:ip (:ip properties)
+               :neighbors 4
+               :requires [:matlab-cmd] 
+                          ;provides either state1, state2, or state3
+               :provides [(keyword (str "state" (last (str (:id properties)))))]}
   
-   (w/vertex :control  
-             ; [:matlab-cmd] 
-              [(keyword (str "state" (last (str (:id properties)))))] 
-              (fn [cmd-stream]
-                #_(s/consume 
-                   (fn [cmd-map] (cmd-handler cmd-map)
-                   cmd-stream))))
+         (w/vertex :control  
+                    [:matlab-cmd] 
+                    (fn [cmd-stream]
+                      (s/consume 
+                        (fn [cmd-map] (cmd-handler cmd-map))
+                        cmd-stream)))
     
-             ;this vertex is either :state1, :state2, or :state3
-   (w/vertex (keyword (str "state" (last (str (:id properties)))))
-              [] 
-              (fn [] 
-                (s/periodically 
-                  100 
-                  (fn [] [(:x last-state) (:y last-state) (:t last-state)])))))
- 
- (future location-tracker)
- (future gtg-handler))
+                   ;this vertex is either :state1, :state2, or :state3
+         (w/vertex (keyword (str "state" (last (str (:id properties)))))
+                    [] 
+                    (fn [] 
+                      (s/periodically 
+                        100 
+                        (fn [] [(:x last-state) (:y last-state) (:t last-state)])))))))
 
 
 

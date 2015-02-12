@@ -163,6 +163,8 @@
             cs (keys woserver)
             ss (vals woserver)]        
         (println "starting up server")  
+        
+        ;;temporarily removed deref below
         (reset! server-sys (d/chain (apply d/zip (map s/take! ss)) 
                  
                                   (fn [responses] 
