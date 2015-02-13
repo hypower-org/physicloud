@@ -92,14 +92,14 @@ public class PhysiCloudClient {
 	//method for MATLAB users to get the state data of
 	// a particular robot
 	@SuppressWarnings("unchecked")
-	public Long[] getData(String id){
-		Long[] data = new Long[3];
+	public double[] getData(String id){
+		double[] data = new double[3];
 		if(currentData != null){
 			if(currentData.containsKey(id)){
-				Vector<Object> robotState = (Vector<Object>) currentData.get(id);
-				data[0] = (Long) robotState.get(0);
-				data[1] = (Long) robotState.get(1);
-				data[2] = (Long) robotState.get(2);
+				Vector<Long> robotState = (Vector<Long>) currentData.get(id);
+				data[0] = (double) robotState.get(0).doubleValue();
+				data[1] = (double) robotState.get(1).doubleValue();
+				data[2] = (double) robotState.get(2).doubleValue();
 			}
 			else{
 				System.out.println("Error: Robot with that ID does not exist");

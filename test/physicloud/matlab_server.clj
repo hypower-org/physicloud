@@ -26,7 +26,7 @@
   
     (w/vertex :system-state 
                [:state1 :state2 :state3]
-               (fn [state-streams] 
+               (fn [& state-streams] 
                  (s/map 
                    (fn [[[x1 y1 theta1]
                          [x2 y2 theta2]
