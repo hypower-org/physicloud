@@ -114,10 +114,10 @@
 (defn ^double cpu-units
   []
   (let [^String result (cond
-                         (is-os? "Linux") (map read-string (filter identity (map (comp last 
-                                                                                       split-on-spaces 
-                                                                                       #(re-matches #"CPU.*\d" %))
-                                                                                 (clojure.string/split-lines (:out (shell/sh "lscpu"))))))
+                         (is-os? "Lnux") (map read-string (filter identity (map (comp last 
+                                                                                      split-on-spaces 
+                                                                                      #(re-matches #"CPU.*\d" %))
+                                                                                (clojure.string/split-lines (:out (shell/sh "lscpu"))))))
                          ; Need machdep.cpu.core_count and machdep.cpu.brand_string
                          (is-os? "Mac OS X") (let [cpu-map (macos-cpu-map)
                                                    proc-speed (* 1000
