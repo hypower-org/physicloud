@@ -16,13 +16,16 @@
 
   (phy/physicloud-instance
          {:ip ip
-          :neighbors 3
+          :neighbors 4
           :requires [:state1 :state2 :state3] 
           :provides [:matlab-cmd]}
   
     (w/vertex :matlab-cmd 
                [] 
-               (fn [] (s/->source (repeatedly (fn [] (ml/to-clj-map (. ml/in readObject)))))))
+               (fn [] (s/->source (repeatedly (fn [] (let [cmd-map (ml/to-clj-map (. ml/in readObject))]
+                                                       (println "Sending command: " cmd-map)
+                                                       cmd-map))))))
+                                                       
   
     (w/vertex :system-state 
                [:state1 :state2 :state3]

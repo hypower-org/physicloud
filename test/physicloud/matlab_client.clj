@@ -7,7 +7,8 @@
             [physicloud.gt-math :as math])
   (:use [physicloud.utils])
   (:import [com.phidgets SpatialPhidget]
-         [edu.ycp.robotics KobukiRobot]))
+         [edu.ycp.robotics KobukiRobot])
+  (:gen-class))
 
 ;this agent's properties are loaded from a map in config.clj
 ;config map should look like:
