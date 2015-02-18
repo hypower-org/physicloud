@@ -162,14 +162,12 @@
     (if server      
       (let [woserver (dissoc server ::cleanup)        
             cs (keys woserver)
-            ss (vals woserver)
-            responses-def  (apply d/zip (map s/take! ss)) ]        
+            ss (vals woserver)]        
         (println "starting up server")  
-        (println (type responses-def))
         ;;temporarily removed deref below
         (reset! server-sys 
                 @(d/chain'
-                         responses-def
+                        (apply d/zip (map s/take! ss))
                  
                         (fn server-builder [responses] 
                                      
@@ -181,18 +179,18 @@
                                            
                                 sys (->> 
                                      
-                                      (mapcat (fn [x]                                                                                           
+                                      (mapcat (fn [client-key]                                                                                           
                                                
-                                                [(w/vertex (make-key "providing-" x) []
+                                                [(w/vertex (make-key "providing-" client-key) []
                                                             (fn []                                            
                                                               (->> 
-                                                                (decode-stream (get server (name x)) frame)                                                                  
+                                                                (decode-stream (get server (name client-key)) frame)                                                                  
                                                                 (s/filter not-empty)
                                                                 (s/map (fn [x] (read-string x))))))       
                                                 
-                                                 (w/vertex (make-key "receiving-" x)
+                                                 (w/vertex (make-key "receiving-" client-key)
                                                             (->> 
-                                                              (let [pred (set (:requires (get connections x)))]
+                                                              (let [pred (set (:requires (get connections client-key)))]
                                                                 (reduce (fn [coll r] 
                                                                           (if (some pred (:provides (get connections r)))
                                                                             (conj coll (make-key "providing-" r))
@@ -203,11 +201,15 @@
                                                               distinct
                                                               vec)
                                                             (fn [& streams] 
-                                                              (let [recipient (get server (name x))                                                  
+                                                              (let [recipient (get server (name client-key))                                                  
                                                                intermediate (s/stream)]
                                                                 (doseq [s streams] 
-                                                                  (s/connect-via s (fn [x] (s/put! intermediate (encode' x))) intermediate))
-                                                                (s/connect-via intermediate (fn [x] (apply d/zip (doall (map #(s/put! recipient %) x)))) recipient))))])
+                                                                  (s/connect-via s (fn encode-fn [m] (s/put! intermediate (encode' m))) intermediate))
+                                                                (s/connect-via intermediate 
+                                                                               (fn [x] (apply d/zip (doall (map
+                                                                                                             (fn [val] (s/put! recipient val))
+                                                                                                             x)))) 
+                                                                               recipient))))])
                                               cs')
                                      
                                       (cons (w/vertex (make-key "providing-" leader) [] 
