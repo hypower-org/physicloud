@@ -219,8 +219,7 @@
                                      
                                       (cons (w/vertex (make-key "providing-" leader) [] 
                                                        (fn []                                            
-                                                         (->> 
-                                                           
+                                                         (->>                                                         
                                                            (decode-stream (get server leader) frame)                                                                  
                                                            (s/filter not-empty)
                                                            (s/map (fn [x] (read-string x)))))))

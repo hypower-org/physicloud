@@ -35,7 +35,7 @@
   
   (let [c-data {:host host :port port}]
     (d/loop [c (->                         
-                 (tcp/client c-data)                         
+                 (d/catch (tcp/client c-data) (fn [e] nil))                         
                  (d/timeout! interval nil))]          
        (d/chain
          c
