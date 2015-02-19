@@ -215,7 +215,7 @@
         
         (doseq [c cs]
           (when-not (= c ip)          
-            (s/put! (get server c) (pr-str ::connected)))))
+            (s/put! (get server c) (nippy/freeze ::connected)))))
       
       ;Add in more complex checks here in the future
       
