@@ -36,17 +36,20 @@
   (let [c-data {:host host :port port}]
     (d/loop [c (->                         
                  (d/catch (tcp/client c-data) (fn [e] false))                         
-                 (d/timeout! interval nil))]          
-       (d/chain
-         c
-         (fn [x] 
-           (if x
-             x    
-             (do 
-               (println "Connecting to " host " ...")
-               (d/recur (-> 
-                          (d/catch (tcp/client c-data) (fn [e] false)) 
-                          (d/timeout! interval nil))))))))))
+                 (d/timeout! interval false))]       
+            
+            (Thread/sleep interval)      
+            
+            (d/chain
+              c
+              (fn [x] 
+                (if x
+                  x    
+                  (do 
+                    (println "Connecting to " host " ...")
+                    (d/recur (-> 
+                               (d/catch (tcp/client c-data) (fn [e] false)) 
+                               (d/timeout! interval false))))))))))
 
 (defn physi-server  
   "Creates a PhysiCloud server that waits for the given clients to connect."
@@ -141,13 +144,11 @@
         
         ps (println "respondents: "respondents)
         
-        server (if (= leader ip) (apply physi-server ip respondents))
+        client (physi-client {:host leader :port port})
         
-        client (physi-client {:host leader :port port})         
+        server (if (= leader ip) @(apply physi-server ip respondents))                 
         
-        client @client
-        
-        server @server]    
+        client @client]    
     
     (s/put! client (nippy/freeze [requires provides ip]))  
     
