@@ -34,21 +34,22 @@
   (assert (some? host) "A host IP address must be specified.")  
   
   (let [c-data {:host host :port port}]
-    (d/loop [c (->                         
-                 (d/catch (tcp/client c-data) (fn [e] false))                         
-                 (d/timeout! interval false))]       
+    (d/future 
+      @(d/loop [c (->                         
+                    (d/catch (tcp/client c-data) (fn [e] false))                         
+                    (d/timeout! interval false))]       
             
-            (Thread/sleep interval)          
-            (d/chain
-              c
-              (fn [x] 
-                (if x
-                  x    
-                  (do 
-                    (println "Connecting to " host " ...")
-                    (d/recur (-> 
-                               (d/catch (tcp/client c-data) (fn [e] false)) 
-                               (d/timeout! interval false))))))))))
+          (Thread/sleep interval)          
+          (d/chain
+            c
+            (fn [x] 
+              (if x
+                x    
+                (do 
+                  (println "Connecting to " host " ...")
+                  (d/recur (-> 
+                             (d/catch (tcp/client c-data) (fn [e] false)) 
+                             (d/timeout! interval false)))))))))))
 
 (defn physi-server  
   "Creates a PhysiCloud server that waits for the given clients to connect."
@@ -145,11 +146,7 @@
         
         client (physi-client {:host leader :port port})
         
-        pr (println "client trying")
-        
         server (if (= leader ip) @(apply physi-server ip respondents))     
-        
-        pr (println "server started")
         
         client @client]    
     
