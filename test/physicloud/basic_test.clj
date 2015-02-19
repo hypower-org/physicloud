@@ -1,5 +1,6 @@
 (ns physicloud.basic-test
   (:require [watershed.core :as w]
+            [aleph.tcp :as tcp]
             [manifold.stream :as s]
             [manifold.deferred :as d]
             [physicloud.core' :as phy]))

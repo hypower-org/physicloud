@@ -38,8 +38,7 @@
                  (d/catch (tcp/client c-data) (fn [e] false))                         
                  (d/timeout! interval false))]       
             
-            (Thread/sleep interval)      
-            
+            (Thread/sleep interval)          
             (d/chain
               c
               (fn [x] 
@@ -146,7 +145,11 @@
         
         client (physi-client {:host leader :port port})
         
-        server (if (= leader ip) @(apply physi-server ip respondents))                 
+        pr (println "client trying")
+        
+        server (if (= leader ip) @(apply physi-server ip respondents))     
+        
+        pr (println "server started")
         
         client @client]    
     
@@ -221,7 +224,7 @@
       
       ;#### Block until server is properly initialized ####
       
-      (println (b/convert @(s/take! client) String)))
+      (println (nippy/thaw @(s/take! client))))
     
     ; Construct the rest of the system and store structures into a map: {:client ... :system ...}
     (-> 
