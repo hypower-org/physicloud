@@ -1,4 +1,4 @@
-(ns physicloud.core
+(ns physicloud.core'
   (:require [aleph.tcp :as tcp] 
             [manifold.stream :as s]
             [manifold.deferred :as d]
@@ -10,25 +10,13 @@
   (:use [gloss.core]
         [gloss.io]))
 
-(def ^:private B-ary (Class/forName "[B"))
-(def ^:private delimiter "|!|")
-(def ^:private frame (string :utf-8 :delimiters [delimiter]))
-
 (defn assemble-phy 
   [& outlines] 
   (apply w/assemble util/manifold-step util/manifold-connect outlines))
-
-(defn- ^String delimit 
-  [^String s]
-  (str s delimiter))
-
-(defn encode' 
-  [msg]
-  (encode frame (pr-str msg)))
   
 (defn- defrost 
   [msg] 
-  (nippy/thaw (b/convert msg B-ary)))
+  (nippy/thaw (b/to-byte-array msg)))
 
 (defn- handler 
   [f clients ch client-info]
@@ -161,7 +149,7 @@
         
         server @server]    
     
-    (s/put! client (pr-str [requires provides ip]))  
+    (s/put! client (nippy/freeze [requires provides ip]))  
     
     ; Server construction if this particular cpu wins the election.
     (if server      
@@ -177,7 +165,7 @@
                         (fn server-builder [responses] 
                                      
                           (let [connections (doall (map (fn [r] (apply hash-map (doall (interleave [:requires :provides :ip] 
-                                                                                                   (read-string (b/convert r String))))))                                                                
+                                                                                                   (nippy/thaw (b/to-byte-array r))))))                                                                
                                                           responses))
                          
                                 cs' (mapv keyword (remove #(= leader %) cs))
@@ -187,11 +175,8 @@
                                       (mapcat (fn [client-key]                                                                                           
                                                
                                                 [(w/vertex (make-key "providing-" client-key) []
-                                                            (fn []                                            
-                                                              (->> 
-                                                                (decode-stream (get server (name client-key)) frame)                                                                  
-                                                                (s/filter not-empty)
-                                                                (s/map (fn [x] (read-string x))))))       
+                                                            (fn []     
+                                                              (s/map b/to-byte-array (get server (name client-key)))))       
                                                 
                                                  (w/vertex (make-key "receiving-" client-key)
                                                             (->> 
@@ -206,32 +191,20 @@
                                                               distinct
                                                               vec)
                                                             (fn [& streams] 
-                                                              (let [recipient (get server (name client-key))                                                  
-                                                               intermediate (s/stream)]
+                                                              (let [recipient (get server (name client-key))]
                                                                 (doseq [s streams] 
-                                                                  (s/connect-via s (fn encode-fn [m] (s/put! intermediate (encode' m))) intermediate))
-                                                                (s/connect-via intermediate 
-                                                                               (fn [x] (apply d/zip (doall (map
-                                                                                                             (fn [val] (s/put! recipient val))
-                                                                                                             x)))) 
-                                                                               recipient))))])
+                                                                  (s/connect s recipient)))))])
                                               cs')
                                      
                                       (cons (w/vertex (make-key "providing-" leader) [] 
-                                                       (fn []                                            
-                                                         (->> 
-                                                           
-                                                           (decode-stream (get server leader) frame)                                                                  
-                                                           (s/filter not-empty)
-                                                           (s/map (fn [x] (read-string x)))))))
+                                                       (fn []     
+                                                         (s/map b/to-byte-array (get server leader)))))
                                      
                                       (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
                                                        (fn [& streams] 
-                                                         (let [recipient (get server leader)                                                  
-                                                               intermediate (s/stream)]
+                                                         (let [recipient (get server leader)]
                                                            (doseq [s streams] 
-                                                             (s/connect-via s (fn [x] (s/put! intermediate (encode' x))) intermediate))
-                                                           (s/connect-via intermediate (fn [x] (apply d/zip (doall (map #(s/put! recipient %) x)))) recipient))))))] 
+                                                             (s/connect s recipient)))))))] 
                                        
                             ;generate dependencies!
                      
@@ -263,13 +236,7 @@
         
       (assoc :system 
                
-             (let [decoded-client (->> 
-                                                                                                                                                 
-                                    (decode-stream client frame)
-                                                                    
-                                    (s/filter not-empty)
-                                                                  
-                                    (s/map (fn [x] (read-string x))))
+             (let [decoded-client (s/map nippy/thaw client)
                      
                    id (last (clojure.string/split ip #"\."))
                      
@@ -285,9 +252,9 @@
                           (mapv (fn [x y] (w/vertex x [] (fn [] y))) 
                                 requires 
                                 (apply util/multiplex (util/clone decoded-client) (map (fn [x] (fn [[sndr val]] 
-                                                                                       (when (= sndr x)
-                                                                                         val))) 
-                                                                             requires)))))
+                                                                                                 (when (= sndr x)
+                                                                                                   val))) 
+                                                                                       requires)))))
                      
                    ps (mapv (fn [p] (w/vertex (make-key "providing-" p) [p]                                       
                                                (fn [stream] (s/map (fn [x] [p x]) stream))                                     
@@ -355,7 +322,7 @@
                                    (fn 
                                      [& streams] 
                                      (doseq [s streams] 
-                                       (s/connect-via s (fn [x] (apply d/zip (doall (map #(s/put! client %) (encode' x))))) client)))))))))))
+                                       (s/connect-via s (fn [x] (s/put! client (nippy/freeze x))) client)))))))))))
 
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 

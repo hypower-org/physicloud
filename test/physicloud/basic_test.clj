@@ -2,7 +2,7 @@
   (:require [watershed.core :as w]
             [manifold.stream :as s]
             [manifold.deferred :as d]
-            [physicloud.core :as phy]))
+            [physicloud.core' :as phy]))
 
 (defn -main
   [ip neighbors]
