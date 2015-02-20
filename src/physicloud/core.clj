@@ -9,7 +9,7 @@
             [physicloud.utils :as util]
             [gloss.core :as gcore]
             [gloss.io :as gio]))
-
+ 
 (defn assemble-phy 
   [& outlines] 
   (apply w/assemble util/manifold-step util/manifold-connect outlines))
