@@ -3,7 +3,7 @@
             [aleph.tcp :as tcp]
             [manifold.stream :as s]
             [manifold.deferred :as d]
-            [physicloud.core' :as phy]))
+            [physicloud.core :as phy]))
 
 (defn -main
   [ip neighbors]

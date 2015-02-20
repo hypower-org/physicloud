@@ -2,8 +2,7 @@
   (:require [watershed.core :as w]
             [manifold.stream :as s]
             [manifold.deferred :as d]
-            [physicloud.core :as phy]
-            [physicloud.gt-math :as math])
+            [physicloud.core :as phy])
   (:use [physicloud.utils])
   (:import [java.net ServerSocket Socket SocketException]
            [java.io ObjectOutputStream ObjectInputStream]
