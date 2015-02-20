@@ -2,9 +2,8 @@
   (:require [watershed.core :as w]
             [manifold.stream :as s]
             [manifold.deferred :as d]
-            [physicloud.core :as phy]
-            [physicloud.matlab :as ml]
-            [physicloud.gt-math :as math])
+            [physicloud.core' :as phy]
+            [physicloud.matlab :as ml])
   (:use [physicloud.utils])
   (:import [com.phidgets SpatialPhidget]
          [edu.ycp.robotics KobukiRobot])

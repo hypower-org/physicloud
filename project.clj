@@ -12,10 +12,10 @@
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [gloss "0.2.4"]
                  [org.clojure/data.int-map "0.1.0"]
-                 [jkobuki "1.1.0"]]
+                 [jkobuki "1.1.0"]
+                 [phidget "1.0.0"]
+                 [jssc "2.8.0"]]
   :java-source-paths ["src/physicloud/PhysiCloudClient"]
-  :resource-paths ["resources/phidget21.jar"
-                   "resources/jssc-2.8.0.jar"]
- ; :main physicloud.matlab-client
-  ;:aot [physicloud.matlab-client]
+  :main physicloud.matlab-client
+  :aot [physicloud.matlab-client]
   )
