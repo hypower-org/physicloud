@@ -6,9 +6,9 @@
             [watershed.core :as w]
             [taoensso.nippy :as nippy]
             [aleph.udp :as udp]
-            [physicloud.utils :as util])
-  (:use [gloss.core]
-        [gloss.io]))
+            [physicloud.utils :as util]
+            [gloss.core :as gcore]
+            [gloss.io :as gio]))
 
 (defn assemble-phy 
   [& outlines] 
@@ -17,6 +17,17 @@
 (defn- defrost 
   [msg] 
   (nippy/thaw (b/to-byte-array msg)))
+
+(gcore/defcodec byte-frame (gcore/repeated :byte))
+
+
+(defn encode-msg [msg]
+  (gio/contiguous (gio/encode byte-frame (vec (nippy/freeze msg)))))
+
+
+(defn decode-msg [enc-msg]
+  (nippy/thaw (byte-array (gio/decode byte-frame enc-msg))))
+
 
 (defn- handler 
   [f clients ch client-info]
@@ -176,8 +187,9 @@
                                       (mapcat (fn [client-key]                                                                                           
                                                
                                                 [(w/vertex (make-key "providing-" client-key) []
-                                                            (fn []     
-                                                              (s/map b/to-byte-array (get server (name client-key)))))       
+                                                            (fn []  (gio/decode-stream (get server (name client-key)) byte-frame)
+                                                                    (s/map byte-array)
+                                                                    (s/map nippy/thaw)))       
                                                 
                                                  (w/vertex (make-key "receiving-" client-key)
                                                             (->> 
@@ -199,7 +211,9 @@
                                      
                                       (cons (w/vertex (make-key "providing-" leader) [] 
                                                        (fn []     
-                                                         (s/map b/to-byte-array (get server leader)))))
+                                                         (gio/decode-stream (get server leader) byte-frame)
+                                                         (s/map byte-array)
+                                                         (s/map nippy/thaw))))
                                      
                                       (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
                                                        (fn [& streams] 
@@ -215,13 +229,13 @@
         
         (doseq [c cs]
           (when-not (= c ip)          
-            (s/put! (get server c) (nippy/freeze ::connected)))))
+            (s/put! (get server c) (encode-msg ::connected)))))
       
       ;Add in more complex checks here in the future
       
       ;#### Block until server is properly initialized ####
       
-      (println (nippy/thaw @(s/take! client))))
+      (println @(s/take! client)))
     
     ; Construct the rest of the system and store structures into a map: {:client ... :system ...}
     (-> 
@@ -237,7 +251,10 @@
         
       (assoc :system 
                
-             (let [decoded-client (s/map nippy/thaw client)
+             (let [decoded-client (->>
+                                    (gio/decode-stream client byte-frame)
+                                    (s/map byte-array)
+                                    (s/map nippy/thaw))
                      
                    id (last (clojure.string/split ip #"\."))
                      
@@ -323,7 +340,7 @@
                                    (fn 
                                      [& streams] 
                                      (doseq [s streams] 
-                                       (s/connect-via s (fn [x] (s/put! client (nippy/freeze x))) client)))))))))))
+                                       (s/connect-via s (fn [x] (s/put! client (encode-msg x))) client)))))))))))
 
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 
