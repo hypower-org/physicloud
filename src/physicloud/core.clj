@@ -1,4 +1,4 @@
-(ns physicloud.core'
+(ns physicloud.core
   (:require [aleph.tcp :as tcp] 
             [manifold.stream :as s]
             [manifold.deferred :as d]

@@ -8,7 +8,7 @@
   (:import [com.phidgets SpatialPhidget]
          [edu.ycp.robotics KobukiRobot])
   (:gen-class))
-
+ 
 ;this agent's properties are loaded from a map in config.clj
 ;config map should look like:
 ;{:id  :robot1
@@ -16,7 +16,7 @@
 ; :start-x 0
 ; :start-y 0
 ; :start-t 1.570796}
-
+(defn -main []
 (def properties (load-file "config.clj"))
 
 (def spatial (new SpatialPhidget))
@@ -255,7 +255,7 @@
     (Thread/sleep 100) 
     (recur)))
 
-(defn -main []
+
  (future (location-tracker))
  (future (gtg-handler))
  (future (phy/physicloud-instance

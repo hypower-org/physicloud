@@ -16,6 +16,7 @@
                  [phidget "1.0.0"]
                  [jssc "2.8.0"]]
   :java-source-paths ["src/physicloud/PhysiCloudClient"]
-  :main physicloud.matlab-client
-  :aot [physicloud.matlab-client]
+ ; :main physicloud.matlab-client
+  ;:aot [physicloud.matlab-client]
   )
+ 
