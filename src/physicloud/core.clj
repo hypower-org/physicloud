@@ -20,10 +20,8 @@
 
 (gcore/defcodec byte-frame (gcore/repeated :byte))
 
-
 (defn encode-msg [msg]
   (gio/contiguous (gio/encode byte-frame (vec (nippy/freeze msg)))))
-
 
 (defn decode-msg [enc-msg]
   (nippy/thaw (byte-array (gio/decode byte-frame enc-msg))))
@@ -206,9 +204,10 @@
                                                               distinct
                                                               vec)
                                                             (fn [& streams] 
-                                                              (let [recipient (get server (name client-key))]
+                                                              (let [recipient (get server (name client-key))                                                  
+                                                                    intermediate (s/stream)]
                                                                 (doseq [s streams] 
-                                                                  (s/connect s recipient)))))])
+                                                                  (s/connect-via s (fn [m] (s/put! recipient (encode-msg m))) recipient)))))])
                                               cs')
                                      
                                       (cons (w/vertex (make-key "providing-" leader) [] 
@@ -220,9 +219,10 @@
                                      
                                       (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
                                                        (fn [& streams] 
-                                                         (let [recipient (get server leader)]
+                                                         (let [recipient (get server leader)                                                  
+                                                               intermediate (s/stream)]
                                                            (doseq [s streams] 
-                                                             (s/connect s recipient)))))))] 
+                                                             (s/connect-via s (fn [x] (s/put! recipient (encode-msg x))) recipient)))))))] 
                                        
                             ;generate dependencies!
                      
@@ -238,7 +238,7 @@
       
       ;#### Block until server is properly initialized ####
       
-      (println @(s/take! client)))
+      (println (decode-msg @(s/take! client))))
     
     ; Construct the rest of the system and store structures into a map: {:client ... :system ...}
     (-> 
