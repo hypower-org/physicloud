@@ -187,9 +187,11 @@
                                       (mapcat (fn [client-key]                                                                                           
                                                
                                                 [(w/vertex (make-key "providing-" client-key) []
-                                                            (fn []  (gio/decode-stream (get server (name client-key)) byte-frame)
-                                                                    (s/map byte-array)
-                                                                    (s/map nippy/thaw)))       
+                                                            (fn []
+                                                              (->>
+                                                                (gio/decode-stream (get server (name client-key)) byte-frame)
+                                                                (s/map byte-array)
+                                                                (s/map nippy/thaw))))       
                                                 
                                                  (w/vertex (make-key "receiving-" client-key)
                                                             (->> 
@@ -210,10 +212,11 @@
                                               cs')
                                      
                                       (cons (w/vertex (make-key "providing-" leader) [] 
-                                                       (fn []     
-                                                         (gio/decode-stream (get server leader) byte-frame)
-                                                         (s/map byte-array)
-                                                         (s/map nippy/thaw))))
+                                                       (fn []
+                                                         (->>
+                                                           (gio/decode-stream (get server leader) byte-frame)
+                                                           (s/map byte-array)
+                                                           (s/map nippy/thaw)))))
                                      
                                       (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
                                                        (fn [& streams] 
