@@ -278,7 +278,7 @@
                     (fn [] 
                       (s/periodically 
                         100 
-                        (fn [] [(:x last-state) (:y last-state) (:t last-state)])))))))
+                        (fn [] [(:x @last-state) (:y @last-state) (:t @last-state)])))))))
 
 
 
