@@ -33,10 +33,12 @@
                    (fn [[[x1 y1 theta1]
                          [x2 y2 theta2]
                          [x3 y3 theta3]]] 
-                     (java.util.HashMap. 
-                       {"robot1" (java.util.Vector. [x1 y1 theta1]) 
-                        "robot2" (java.util.Vector. [x2 y2 theta2]) 
-                        "robot3" (java.util.Vector. [x3 y3 theta3])})) 
+                     (let [system-state-map (java.util.HashMap. 
+                                              {"robot1" (java.util.Vector. [x1 y1 theta1]) 
+                                               "robot2" (java.util.Vector. [x2 y2 theta2]) 
+                                               "robot3" (java.util.Vector. [x3 y3 theta3])})]
+                       (println system-state-map)
+                       system-state-map)
                    (apply s/zip state-streams))))
   
     (w/vertex :matlab-push 

@@ -1,4 +1,4 @@
-(defproject hypower-org/physicloud "0.1.1"
+(defproject hypower-org/physicloud "0.1.1-SNAPSHOT"
   :description "A platform for programming and managing cyber-physical systems (CPS)."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
@@ -16,7 +16,7 @@
                  [phidget "1.0.0"]
                  [jssc "2.8.0"]]
   :java-source-paths ["src/physicloud/PhysiCloudClient"]
- ; :main physicloud.matlab-client
-  ;:aot [physicloud.matlab-client]
+  :main physicloud.matlab-client
+  :aot [physicloud.matlab-client]
   )
  
