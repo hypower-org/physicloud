@@ -96,7 +96,7 @@ public class PhysiCloudClient {
 		double[] data = new double[3];
 		if(currentData != null){
 			if(currentData.containsKey(id)){
-				Vector<Long> robotState = (Vector<Long>) currentData.get(id);
+				Vector<Double> robotState = (Vector<Double>) currentData.get(id);
 				data[0] = (double) robotState.get(0).doubleValue();
 				data[1] = (double) robotState.get(1).doubleValue();
 				data[2] = (double) robotState.get(2).doubleValue();
