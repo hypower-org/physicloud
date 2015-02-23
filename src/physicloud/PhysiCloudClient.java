@@ -97,9 +97,9 @@ public class PhysiCloudClient {
 		if(currentData != null){
 			if(currentData.containsKey(id)){
 				Vector<Double> robotState = (Vector<Double>) currentData.get(id);
-				data[0] = (double) robotState.get(0).doubleValue();
-				data[1] = (double) robotState.get(1).doubleValue();
-				data[2] = (double) robotState.get(2).doubleValue();
+				data[0] =  robotState.get(0).doubleValue();
+				data[1] =  robotState.get(1).doubleValue();
+				data[2] =  robotState.get(2).doubleValue();
 			}
 			else{
 				System.out.println("Error: Robot with that ID does not exist");

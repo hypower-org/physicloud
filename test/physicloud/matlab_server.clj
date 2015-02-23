@@ -34,10 +34,10 @@
                          [x2 y2 theta2]
                          [x3 y3 theta3]]] 
                      (let [system-state-map (java.util.HashMap. 
-                                              {"robot1" (java.util.Vector. [(double x1) (double y1) (double theta1)]) 
-                                               "robot2" (java.util.Vector. [(double x2) (double y2) (double theta2)]) 
-                                               "robot3" (java.util.Vector. [(double x3) (double y3) (double theta3)])})]
-                       (println system-state-map)
+                                              {"robot1" (java.util.Vector. [x1 y1 theta1]) 
+                                               "robot2" (java.util.Vector. [x2 y2 theta2]) 
+                                               "robot3" (java.util.Vector. [x2 y2 theta2])})]
+                       ;(println system-state-map)
                        system-state-map))
                    (apply s/zip state-streams))))
   
@@ -45,7 +45,7 @@
                [:system-state] 
                (fn [state-stream] 
                  (s/consume 
-                   (fn [state-map] ;(println "Server: pushing data")
+                   (fn [state-map]; (println "Server: pushing data: " state-map)
                      (ml/write-data state-map)) 
                    state-stream)))))
 
