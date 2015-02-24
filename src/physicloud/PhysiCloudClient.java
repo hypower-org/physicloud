@@ -148,4 +148,57 @@ public class PhysiCloudClient {
 		} 
 		catch (IOException e) {e.printStackTrace();}
 	}
+	
+	//method for MATLAB users to drive all robots at v, w
+	public void drive(Double v, Double w){
+		HashMap<String, Object> driveMap = new HashMap<String, Object>();
+		driveMap.put("command", "drive");
+		driveMap.put("v", v);
+		driveMap.put("w", w);
+		try {
+			out.writeObject(driveMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	//method for MATLAB users to drive a given set of robots at v, w
+	public void drive(String[] robotIds, Double v, Double w){
+		HashMap<String, Object> driveMap = new HashMap<String, Object>();
+		driveMap.put("command", "drive");
+		Vector<String> ids =  new Vector<String>();
+		for (int i = 0; i < robotIds.length; i++){
+			ids.add(robotIds[i]);
+		}
+		driveMap.put("ids", ids);
+		driveMap.put("v", v);
+		driveMap.put("w", w);
+		try {
+			out.writeObject(driveMap);
+		}
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	//method for MATLAB users to zero a specified state variable (x, y, t)
+	public void zero(String var){
+		HashMap<String, Object> zeroMap = new HashMap<String, Object>();
+		zeroMap.put("command", "zero");
+		if(var.toLowerCase().equals("x")){
+			zeroMap.put("x", "zero");
+		}
+		if(var.toLowerCase().equals("y")){
+			zeroMap.put("y", "zero");
+		}
+		if(var.toLowerCase().equals("t")){
+			zeroMap.put("t", "zero");
+		}
+		if(var.toLowerCase().equals("all")){
+			zeroMap.put("x", "zero");
+			zeroMap.put("y", "zero");
+			zeroMap.put("t", "zero");
+		}
+		try {
+			out.writeObject(zeroMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
 }

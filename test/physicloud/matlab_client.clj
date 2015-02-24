@@ -16,6 +16,7 @@
 ; :start-x 0
 ; :start-y 0
 ; :start-t 1.570796}
+
 (defn -main []
 (def properties (load-file "config.clj"))
 
@@ -135,8 +136,11 @@
           theta (:t @last-state)]
          
       (if (and (< (Math/abs x-dif) 0.03) (< (Math/abs y-dif) 0.03))
-        ;if robot is already where it needs to be, stop movement
-        (.control robot 0 0)
+        ;if robot is already where it needs to be, stop movement,
+        ;set go-to-coords to nil
+        (do
+          (.control robot 0 0)
+          (reset! go-to-coords nil))
         ;else move!
         (cond
           ;the destination is north east of robot's global position
@@ -232,6 +236,7 @@
       (= cmd "go-to")
       (let [my-id-key (:id properties)
             coords    (my-id-key cmd-map)]
+        (reset! stop? false)
         (reset! go-to-coords coords))
       
       (= cmd "stop")
@@ -243,6 +248,31 @@
             (reset! stop? true))
           ;;if no ids sent, all bots should stop
           (reset! stop? true)))
+      
+      (= cmd "drive")
+      (let[ids (get cmd-map "ids")
+           v (get cmd-map "v")
+           w (get cmd-map "w")
+           my-id-key (:id properties)]
+        (if ids
+          ;;if some ids are sent, see if my id is in the list to drive
+          (if (some (fn [x] (= my-id-key x)) ids)
+            (do
+              (reset! stop? false)
+              (.control robot v w)))
+          ;;if no ids sent, all bots should drive
+          (do
+              (reset! stop? false)
+              (.control robot v w))))
+      
+      (= cmd "zero")
+      (let[x (get cmd-map "x")
+           y (get cmd-map "y")
+           t (get cmd-map "t")]
+        (if x (swap! last-state assoc :x 0))
+        (if y (swap! last-state assoc :x 0))
+        (if t (swap! last-state assoc :t 1.570796)))
+      
       :else 
       (println "unsupported command"))))
 
@@ -254,6 +284,7 @@
     
     (Thread/sleep 100) 
     (recur)))
+      
 
 
  (future (location-tracker))
