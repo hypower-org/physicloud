@@ -35,6 +35,3 @@
                      (into [] j-vec) 
                      j-vec)) 
                  (vals clj-m)))))
-
-(defn key-to-string [key]
-  (reduce str (rest (str key))))

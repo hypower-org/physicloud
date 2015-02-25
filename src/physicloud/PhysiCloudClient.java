@@ -35,7 +35,12 @@ public class PhysiCloudClient {
 				}
 			}
 		};
-		connectToPhysiCloud();
+		
+		try {
+			connectToPhysiCloud();
+		}
+		catch (InterruptedException e) {e.printStackTrace();}
+		
 		worker.start();
 	}
 	
@@ -60,13 +65,20 @@ public class PhysiCloudClient {
 	}
 
 	//utility method for connecting TCP client
-	private void connectToPhysiCloud(){
-		try {
-			pcClient = new Socket("127.0.0.1", 8756);
-			out = new ObjectOutputStream(pcClient.getOutputStream());
-			in = new ObjectInputStream(pcClient.getInputStream());
+	private void connectToPhysiCloud() throws InterruptedException{
+		Boolean connected = false;
+		while(!connected){
+			try {
+				pcClient = new Socket("127.0.0.1", 8756);
+				out = new ObjectOutputStream(pcClient.getOutputStream());
+				in = new ObjectInputStream(pcClient.getInputStream());
+				connected = true;
+			}
+			catch (IOException e) {
+				System.out.println("Server not up...");
+				Thread.sleep(1000);
+			}
 		}
-		catch (IOException e) {e.printStackTrace();}
 	}
 	
 	@Deprecated
