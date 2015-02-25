@@ -31,7 +31,7 @@
   (let [clj-m (into {} m)]
     (zipmap (map keyword (keys clj-m)) 
             (map (fn [j-vec] 
-                   (if-not (string? j-vec) 
+                   (if (instance? java.util.Vector j-vec)
                      (into [] j-vec) 
                      j-vec)) 
                  (vals clj-m)))))
