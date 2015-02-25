@@ -81,26 +81,6 @@ public class PhysiCloudClient {
 		}
 	}
 	
-	@Deprecated
-	//method for MATLAB users to retrieve data
-	public Double[] pullData(){
-		Double[] data = new Double[3];
-		if(currentData!= null){
-			data[0] = (Double) currentData.get("x");
-			data[1] = (Double) currentData.get("y");
-			data[2] = (Double) currentData.get("theta");
-		}
-		return data;
-	}
-	
-	@Deprecated
-	//method for MATLAB users to send commands to physicloud
-	public void cmd(Object cmd){
-		try {
-			out.writeObject(cmd);
-		} 
-		catch (IOException e) {e.printStackTrace();}
-	}
 	//method for MATLAB users to get the state data of
 	// a particular robot
 	@SuppressWarnings("unchecked")
@@ -118,6 +98,20 @@ public class PhysiCloudClient {
 			}
 		}
 		return data;		
+	}
+	
+	//method for MATLAB users to send a "go-to" command to a specific robot
+	public void goTo(String robotId, Double xVal, Double yVal){
+		HashMap<String, Object> locationMap = new HashMap<String, Object>();
+		locationMap.put("command", "go-to");
+		Vector<Double> locations =  new Vector<Double>(2);
+		locations.add(0, xVal);
+		locations.add(1, yVal);
+		locationMap.put(robotId, locations);
+		try {
+			out.writeObject(locationMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
 	}
 	
 	//method for MATLAB users to send a "go-to" command to a variable number of robots
@@ -140,6 +134,19 @@ public class PhysiCloudClient {
 	public void stop(){
 		HashMap<String, Object> stopMap = new HashMap<String, Object>();
 		stopMap.put("command", "stop");
+		try {
+			out.writeObject(stopMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	//method for MATLAB users to stop a specific robot's movement
+	public void stop(String robotId){
+		HashMap<String, Object> stopMap = new HashMap<String, Object>();
+		stopMap.put("command", "stop");
+		Vector<String> ids =  new Vector<String>();
+		ids.add(robotId);
+		stopMap.put("ids", ids);
 		try {
 			out.writeObject(stopMap);
 		} 
@@ -173,6 +180,21 @@ public class PhysiCloudClient {
 		catch (IOException e) {e.printStackTrace();}
 	}
 	
+	//method for MATLAB users to drive a specific robot at v, w
+	public void drive(String robotId, Double v, Double w){
+		HashMap<String, Object> driveMap = new HashMap<String, Object>();
+		driveMap.put("command", "drive");
+		Vector<String> ids =  new Vector<String>();
+		ids.add(robotId);
+		driveMap.put("ids", ids);
+		driveMap.put("v", v);
+		driveMap.put("w", w);
+		try {
+			out.writeObject(driveMap);
+		}
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
 	//method for MATLAB users to drive a given set of robots at v, w
 	public void drive(String[] robotIds, Double v, Double w){
 		HashMap<String, Object> driveMap = new HashMap<String, Object>();
@@ -189,8 +211,37 @@ public class PhysiCloudClient {
 		}
 		catch (IOException e) {e.printStackTrace();}
 	}
+
 	
-	//method for MATLAB users to zero a specified state variable (x, y, t)
+	//method for MATLAB users to zero a specified state variable (x, y, t) for a specific robot
+	//pass "all" as var to zero all state variables (zero-ing theta puts it at pi/2)
+	public void zero(String robotId, String var){
+		HashMap<String, Object> zeroMap = new HashMap<String, Object>();
+		zeroMap.put("command", "zero");
+		Vector<String> ids =  new Vector<String>();
+		ids.add(robotId);
+		zeroMap.put("ids", ids);
+		if(var.toLowerCase().equals("x")){
+			zeroMap.put("x", "zero");
+		}
+		if(var.toLowerCase().equals("y")){
+			zeroMap.put("y", "zero");
+		}
+		if(var.toLowerCase().equals("t")){
+			zeroMap.put("t", "zero");
+		}
+		if(var.toLowerCase().equals("all")){
+			zeroMap.put("x", "zero");
+			zeroMap.put("y", "zero");
+			zeroMap.put("t", "zero");
+		}
+		try {
+			out.writeObject(zeroMap);
+		} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	//method for MATLAB users to zero a specified state variable (x, y, t) for a specific robot
+	//pass "all" as var to zero all state variables (zero-ing theta puts it at pi/2)
 	public void zero(String var){
 		HashMap<String, Object> zeroMap = new HashMap<String, Object>();
 		zeroMap.put("command", "zero");
