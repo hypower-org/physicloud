@@ -9,14 +9,21 @@
            [java.io ObjectOutputStream ObjectInputStream]))
 
 (defn -main 
-  [ip]
+  [ip neighbors]
   
   (ml/start-server)
 
   (phy/physicloud-instance
          {:ip ip
-          :neighbors 4
-          :requires [:state1 :state2 :state3] 
+          :neighbors neighbors
+          :requires (cond
+                      (= neighbors 4)
+                      [:state1 :state2 :state3] 
+                      (= neighbors 3)
+                      [:state1 :state2] 
+                      (= neighbors 2)
+                      [:state1])
+                      
           :provides [:matlab-cmd]}
   
     (w/vertex :matlab-cmd 
@@ -25,8 +32,10 @@
                                                        (println "Sending command: " cmd-map)
                                                        cmd-map))))))
                                                        
-  
-    (w/vertex :system-state 
+    ;;buld system-state vertex depnding on how many robots are in system
+    (cond
+      (= neighbors 4)
+      (w/vertex :system-state 
                [:state1 :state2 :state3]
                (fn [& state-streams] 
                  (s/map 
@@ -37,9 +46,32 @@
                                               {"robot1" (java.util.Vector. [x1 y1 theta1]) 
                                                "robot2" (java.util.Vector. [x2 y2 theta2]) 
                                                "robot3" (java.util.Vector. [x2 y2 theta2])})]
-                       ;(println system-state-map)
                        system-state-map))
                    (apply s/zip state-streams))))
+      
+      (= neighbors 3)
+      (w/vertex :system-state 
+               [:state1 :state2]
+               (fn [& state-streams] 
+                 (s/map 
+                   (fn [[[x1 y1 theta1]
+                         [x2 y2 theta2]]] 
+                     (let [system-state-map (java.util.HashMap. 
+                                              {"robot1" (java.util.Vector. [x1 y1 theta1]) 
+                                               "robot2" (java.util.Vector. [x2 y2 theta2])})]
+                       system-state-map))
+                   (apply s/zip state-streams)))) 
+      
+      (= neighbors 2)
+      (w/vertex :system-state 
+	              [:state1]
+	              (fn [state-stream] 
+	                (s/map 
+	                  (fn [[x1 y1 theta1]] 
+	                    (let [system-state-map (java.util.HashMap. 
+	                                             {"robot1" (java.util.Vector. [x1 y1 theta1])})]
+	                      system-state-map))
+	                  state-stream))))
   
     (w/vertex :matlab-push 
                [:system-state] 
