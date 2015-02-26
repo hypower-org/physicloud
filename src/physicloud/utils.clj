@@ -13,13 +13,15 @@
   [in out] 
   (s/connect in out {:upstream? true}))
 
-(defn clone 
+(defn clone
+  "Clones a stream."
   [stream] 
   (let [s (s/stream)]
     (s/connect stream s)
     s))
 
 (defn selector  
+  "Returns a stream that emits the result of applying pred to values within the stream."
   [pred stream]   
   (let [s (s/map identity stream)           
         output (s/stream)]         
@@ -36,8 +38,9 @@
                               (d/recur (s/take! s))))))))        
          output))
       
-(defn take-within 
-  [fn' stream timeout default] 
+(defn take-within
+  "Returns a stream that attempts to emit the application of f to values in the stream. If it cannot do so within timeout, it returns the default value."
+  [f stream timeout default] 
   (let [s (s/map identity stream)
         output (s/stream)]    
     (d/loop
@@ -55,17 +58,18 @@
                            (s/close! s)
                            (s/close! output))                        
                          (do
-                           (s/put! output (fn' x)) 
+                           (s/put! output (f x)) 
                            (d/recur (d/timeout! (s/take! s) timeout default)))))))))
     output))
 
-(defn multiplex 
+(defn demultiplex 
+  "Returns a collection of streams that return the result of applying each predicate in preds to the input stream.
+The first matching stream returns the value."
   [stream & preds]   
-  
   (let [preds (vec preds)       
         n-preds (count preds)      
         streams (repeatedly n-preds s/stream)        
-        multiplexer (apply i/int-map (interleave (range n-preds) streams))       
+        demultiplexer (apply i/int-map (interleave (range n-preds) streams))       
         switch (fn [x]                   
                  (reduce-kv 
                    (fn [stored car v] 
@@ -84,7 +88,7 @@
           (if x
             (let [[id result] (switch x)]
                   (when result 
-                    (s/put! (get multiplexer id) result))
+                    (s/put! (get demultiplexer id) result))
                   (d/recur (s/take! stream)))
             (do
               (doseq [s streams]
@@ -112,6 +116,8 @@
     (zipmap (map (fn [e] (keyword (first e))) macos-cpu-info) (map second macos-cpu-info))))
 
 (defn ^double cpu-units
+  "Returns the cpu value of a cyber-physical unit, which we define for now as the proc-speed * num-cores.
+In the future this function may contain other information about the computing unit."
   []
   (let [^String result (cond
                          (is-os? "Linux") (map read-string (filter identity (map (comp last 

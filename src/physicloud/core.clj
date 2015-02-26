@@ -272,10 +272,10 @@
                           []
                           (mapv (fn [x y] (w/vertex x [] (fn [] y))) 
                                 requires 
-                                (apply util/multiplex (util/clone decoded-client) (map (fn [x] (fn [[sndr val]] 
-                                                                                                 (when (= sndr x)
-                                                                                                   val))) 
-                                                                                       requires)))))
+                                (apply util/demultiplex (util/clone decoded-client) (map (fn [required-type] (fn [[data-type val]] 
+                                                                                                               (when (= data-type required-type)
+                                                                                                                 val))) 
+                                                                                         requires)))))
                      
                    ps (mapv (fn [p] (w/vertex (make-key "providing-" p) [p]                                       
                                                (fn [stream] (s/map (fn [x] [p x]) stream))                                     
