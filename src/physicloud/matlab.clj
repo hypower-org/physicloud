@@ -265,7 +265,7 @@
 
 (defn stop-handler [cmd-map]
   "the stop command map should look something like this:
-   {:command go-to
+   {:command stop
     :ids [robot1 robot2]}
    if no stop command is sent for a specific robot, its id is omitted from the ids vector
    if all robots should stop, ids key is omitted from map"

@@ -328,6 +328,7 @@
                                ;Change this to get a bunch of data...
                                [:heartbeat-status]
                                (fn [stream] (s/reduce merge (util/clone stream))))])
+                   ps (println "heartbeat vertexes constructed.")
                    
                    ; Matlab plugin here! Have an option to enable.
                    ]               

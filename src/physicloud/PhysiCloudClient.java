@@ -240,6 +240,7 @@ public class PhysiCloudClient {
 		} 
 		catch (IOException e) {e.printStackTrace();}
 	}
+	
 	//method for MATLAB users to zero a specified state variable (x, y, t) for a specific robot
 	//pass "all" as var to zero all state variables (zero-ing theta puts it at pi/2)
 	public void zero(String var){

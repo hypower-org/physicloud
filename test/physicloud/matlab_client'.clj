@@ -31,13 +31,15 @@
                           ;provides either state1, state2, or state3
                :provides [(keyword (str "state" (last (str (:id properties)))))]}
               
-                            ;this vertex is either :state1, :state2, or :state3
+                            ;this vertex is either :state1, :state2, or :state3 
          (w/vertex (keyword (str "state" (last (str (:id properties)))))
                     [] 
                     (fn [] 
                       (s/periodically 
                         100 
-                        (fn [] [(:x @ml/last-state) (:y @ml/last-state) (:t @ml/last-state)]))))
+                        (fn [] 
+                          (println "publishing "(keyword (str "state" (last (str (:id properties)))))) 
+                          [(:x @ml/last-state) (:y @ml/last-state) (:t @ml/last-state)]))))
   
          (w/vertex :matlab-plugin  
                     [:matlab-cmd] 
@@ -52,6 +54,6 @@
                         (fn [ctrl-map] 
                           (if-not (:v ctrl-map)
                             (println "ctrl vertex received msg other than a control map: " ctrl-map)
-                          (if-not @ml/stop?
-                            (.control ml/robot (:v ctrl-map) (:w ctrl-map))))
-                        control-stream)))))))
+                            (if-not @ml/stop?
+                              (.control ml/robot (:v ctrl-map) (:w ctrl-map)))))
+                        control-stream))))))
