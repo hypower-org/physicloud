@@ -20,22 +20,21 @@
 
 (gcore/defcodec byte-frame (gcore/repeated :byte))
 
-(defn encode-msg [msg]
+(defn- encode-msg [msg]
   (gio/contiguous (gio/encode byte-frame (vec (nippy/freeze msg)))))
 
-(defn decode-msg [enc-msg]
+(defn- decode-msg [enc-msg]
   (nippy/thaw (byte-array (gio/decode byte-frame enc-msg))))
 
 
 (defn- handler 
-  [f clients ch client-info]
-  (println "client info: "client-info)
-  (let [index (.indexOf clients (:remote-addr client-info))]
-    (if (> index -1)
+  [client-fn clients conn-stream client-info-map]
+  (let [client-idx (.indexOf clients (:remote-addr client-info-map))]
+    (if (> client-idx -1)
       (do
-        (println "Client: " client-info " connected.")
-        (f index ch))
-      (throw (IllegalStateException. (str "Unexpected client, " client-info ", tried to connect to the server."))))))
+        (println "Client: " client-info-map " connected.")
+        (client-fn client-idx conn-stream))
+      (throw (IllegalStateException. (str "Unexpected client, " client-info-map ", tried to connect to the server."))))))
 
 (defn physi-client 
   [{:keys [host port interval] :or {port 10000 interval 2000}}]
@@ -65,8 +64,10 @@
   [{:keys [port] :or {port 10000}} & clients] 
   (let [clients (into [] clients)      
         ds (into [] (repeatedly (count clients) d/deferred))     
-        f (fn [i x] (d/success! (ds i) x))                     
-        server (tcp/start-server #(handler f clients % %2) {:port port})]    
+        deliver-client-fn (fn [i s] (d/success! (ds i) s))                     
+        server (tcp/start-server (fn [conn-stream client-info-map] 
+                                   (handler deliver-client-fn clients conn-stream client-info-map)) 
+                                 {:port port})]    
     (d/chain (apply d/zip ds) (fn [x] (->                                                         
                                         (zipmap clients x)                                                         
                                         (assoc ::cleanup server))))))
@@ -155,19 +156,18 @@
         
         client (physi-client {:host leader :port port})
         
-        server (if (= leader ip) @(apply physi-server ip respondents))     
+        server-info-map (if (= leader ip) @(apply physi-server ip respondents))     
         
         client @client]    
     
     (s/put! client (nippy/freeze [requires provides ip]))  
     
     ; Server construction if this particular cpu wins the election.
-    (if server      
-      (let [woserver (dissoc server ::cleanup)        
+    (if server-info-map      
+      (let [woserver (dissoc server-info-map ::cleanup)        
             cs (keys woserver)
             ss (vals woserver)]        
-        (println "starting up server")  
-        ;;temporarily removed deref below
+        (println ip " starting up server.")  
         (reset! server-sys 
                 @(d/chain'
                         (apply d/zip (map s/take! ss))
@@ -187,7 +187,7 @@
                                                 [(w/vertex (make-key "providing-" client-key) []
                                                             (fn []
                                                               (->>
-                                                                (gio/decode-stream (get server (name client-key)) byte-frame)
+                                                                (gio/decode-stream (get server-info-map (name client-key)) byte-frame)
                                                                 (s/map byte-array)
                                                                 (s/map nippy/thaw))))       
                                                 
@@ -204,7 +204,7 @@
                                                               distinct
                                                               vec)
                                                             (fn [& streams] 
-                                                              (let [recipient (get server (name client-key))                                                  
+                                                              (let [recipient (get server-info-map (name client-key))                                                  
                                                                     intermediate (s/stream)]
                                                                 (doseq [s streams] 
                                                                   (s/connect-via s (fn [m] (s/put! recipient (encode-msg m))) recipient)))))])
@@ -213,13 +213,13 @@
                                       (cons (w/vertex (make-key "providing-" leader) [] 
                                                        (fn []
                                                          (->>
-                                                           (gio/decode-stream (get server leader) byte-frame)
+                                                           (gio/decode-stream (get server-info-map leader) byte-frame)
                                                            (s/map byte-array)
                                                            (s/map nippy/thaw)))))
                                      
                                       (cons (w/vertex (make-key "receiving-" leader) (mapv #(make-key "providing-" %) cs') 
                                                        (fn [& streams] 
-                                                         (let [recipient (get server leader)                                                  
+                                                         (let [recipient (get server-info-map leader)                                                  
                                                                intermediate (s/stream)]
                                                            (doseq [s streams] 
                                                              (s/connect-via s (fn [x] (s/put! recipient (encode-msg x))) recipient)))))))] 
@@ -227,12 +227,12 @@
                             ;generate dependencies!
                      
                             (apply assemble-phy sys)))))
-        (println "server constructed")
+        (println "Server constructed.")
         ;#### Let all the clients know that everything is connected
         
         (doseq [c cs]
           (when-not (= c ip)          
-            (s/put! (get server c) (encode-msg ::connected)))))
+            (s/put! (get server-info-map c) (encode-msg ::connected)))))
       
       ;Add in more complex checks here in the future
       
@@ -244,12 +244,12 @@
     (-> 
       
       (let [ret {:client client}]
-        (if server
+        (if server-info-map
           (do
             (->              
-              (assoc ret :server server)
+              (assoc ret :server server-info-map)
               (assoc :server-sys @server-sys)
-              (update-in [:server ::cleanup] (fn [x] (comp (fn [] (doseq [s (vals server)] (s/close! s))) x)))))
+              (update-in [:server ::cleanup] (fn [x] (comp (fn [] (doseq [s (vals server-info-map)] (s/close! s))) x)))))
           ret))
         
       (assoc :system 
