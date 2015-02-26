@@ -21,15 +21,17 @@
           (catch Exception e# 
             (println (str "caught exception: \"" (.getMessage e#) (.printStackTrace e#))))))))
 
-;this agent's properties are loaded from a map in config.clj
-;config map should look like:
-;{:id  :robot1
-; :ip  "10.10.10.10"
-; :start-x 0
-; :start-y 0
-; :start-t 1.570796}
-
 (defn -main []
+
+	;this agent's properties are loaded from a map in config.clj
+	;config map should look like:
+	;{:id  :robot1
+	; :ip  "10.10.10.10"
+	; :start-x 0
+	; :start-y 0
+	; :start-t 1.570796}
+
+
 	(def properties (load-file "config.clj"))
 	
 	(def spatial (new SpatialPhidget))
@@ -49,7 +51,7 @@
 	
 	(def drive-vals (atom nil))
   (def zero-map (atom nil))
-	
+
 	(defn value-change [new-value, old-value] 
 	  "Computes the change between two values."
 	  (cond 
@@ -94,7 +96,7 @@
 	        ;;if theta is negative, convert to a positive value
 	        t (if (< t 0) (-(* 2 pi)(Math/abs t)) t)]
 	    t))
-	
+
 	(defn location-tracker []
 	  (loop [
 	         prev-l (.getLeftEncoder robot)
@@ -126,7 +128,7 @@
           (reset! last-state {:x x :y y :t theta}))
 	      (recur l r (:x @last-state) (:y @last-state) (:t @last-state)))))
 	 
-	
+
 	(defn stop-handler [cmd-map]
 	"the stop command map should look something like this:
 		{:command go-to
@@ -166,7 +168,7 @@
 		     ;;if no ids sent, all bots should drive at v w
 		     (reset! drive-vals {:v v :w w}))))
 	
-	
+
 	(defn zero-handler [cmd-map]
 	"the zero command map should look something like this:
 		{:command drive
@@ -189,7 +191,7 @@
 		    ;;if no ids sent, all bots should zero
 		     (reset! zero-map (dissoc cmd-map :command :ids)))))
 	 
-	
+
 	(defn cmd-handler [cmd-map]
 		(let [cmd (:command cmd-map)]
 		  (println "COMMAND RECEIVED: " cmd)
@@ -217,13 +219,11 @@
         (.control robot 0 0))
       (Thread/sleep 50);;issue new motor command every 1/20 of a second
       (recur)))
-	
 	(on-pool exec (location-tracker))
   (on-pool exec (motor-controller))
-  
 	(phy/physicloud-instance
 	     {:ip (:ip properties)
-	      :neighbors 2
+	      :neighbors (:neighbors properties)
 	      :requires [:matlab-cmd] 
 	                 ;provides either state1, state2, or state3
 	      :provides [(keyword (str "state" (last (str (:id properties)))))]}
@@ -242,6 +242,5 @@
 	             (s/periodically 
 	               1000 
 	               (fn [] (let [state-vec[(:x @last-state) (:y @last-state) (:t @last-state)]]
-                          (println "Pusing this state vec: "state-vec) 
                           state-vec)))))))
 
