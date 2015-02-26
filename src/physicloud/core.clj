@@ -347,7 +347,7 @@
 
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 
-  
+  (println "starting instance...")
   (loop [t-sys (cpu opts)
          
          sys (:system t-sys)
