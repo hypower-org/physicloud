@@ -90,6 +90,7 @@ public class PhysiCloudClient {
 		return data;
 	}
 	//method for MATLAB users to send a "go-to" command to a specific robot
+    @Deprecated 
 	public void goTo(String robotId, Double xVal, Double yVal){
 		HashMap<String, Object> locationMap = new HashMap<String, Object>();
 		locationMap.put("command", "go-to");
@@ -102,6 +103,7 @@ public class PhysiCloudClient {
 		}
 		catch (IOException e) {e.printStackTrace();}
 	}
+    @Deprecated
 	//method for MATLAB users to send a "go-to" command to a variable number of robots
 	public void goTo(String[] robotIds, Double[] xVals, Double[] yVals){
 		HashMap<String, Object> locationMap = new HashMap<String, Object>();
@@ -167,11 +169,10 @@ public class PhysiCloudClient {
 	public void drive(String robotId, Double v, Double w){
 		HashMap<String, Object> driveMap = new HashMap<String, Object>();
 		driveMap.put("command", "drive");
-		Vector<String> ids = new Vector<String>();
-		ids.add(robotId);
-		driveMap.put("ids", ids);
-		driveMap.put("v", v);
-		driveMap.put("w", w);
+		Vector<Double> velocities = new Vector<Double>(2);
+		velocities.add(0, v);
+		velocities.add(1, w);
+		driveMap.put(robotId, velocities);
 		try {
 			out.writeObject(driveMap);
 		}
@@ -181,13 +182,27 @@ public class PhysiCloudClient {
 	public void drive(String[] robotIds, Double v, Double w){
 		HashMap<String, Object> driveMap = new HashMap<String, Object>();
 		driveMap.put("command", "drive");
-		Vector<String> ids = new Vector<String>();
 		for (int i = 0; i < robotIds.length; i++){
-			ids.add(robotIds[i]);
+			Vector<Double> velocities = new Vector<Double>(2);
+			velocities.add(0, v);
+			velocities.add(1, w);
+			driveMap.put(robotIds[i], velocities);
 		}
-		driveMap.put("ids", ids);
-		driveMap.put("v", v);
-		driveMap.put("w", w);
+		try {
+			out.writeObject(driveMap);
+		}
+		catch (IOException e) {e.printStackTrace();}
+	}
+	//method for MATLAB users to drive a given set of robots at different v, w values
+	public void drive(String[] robotIds, Double[] vs, Double[] ws){
+		HashMap<String, Object> driveMap = new HashMap<String, Object>();
+		driveMap.put("command", "drive");
+		for (int i = 0; i < robotIds.length; i++){
+			Vector<Double> velocities = new Vector<Double>(2);
+			velocities.add(0, vs[i]);
+			velocities.add(1, ws[i]);
+			driveMap.put(robotIds[i], velocities);
+		}
 		try {
 			out.writeObject(driveMap);
 		}
