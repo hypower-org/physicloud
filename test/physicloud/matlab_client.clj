@@ -23,15 +23,13 @@
 
 (defn -main []
 
-	;this agent's properties are loaded from a map in config.clj
-	;config map should look like:
-	;{:id  :robot1
-	; :ip  "10.10.10.10"
-	; :start-x 0
-	; :start-y 0
-	; :start-t 1.570796}
-
-
+;	this agent's properties are loaded from a map in config.clj
+;	config map should look like:
+;	{:id  :robot1
+;	 :ip  "10.10.10.10"
+;	 :start-x 0
+;	 :start-y 0
+;	 :start-t 1.570796}
 	(def properties (load-file "config.clj"))
 	
 	(def spatial (new SpatialPhidget))
@@ -131,16 +129,16 @@
 
 	(defn stop-handler [cmd-map]
 	"the stop command map should look something like this:
-		{:command go-to
+		{:command stop
 		 :ids [robot1 robot2]}
 		if no stop command is sent for a specific robot, its id is omitted from the ids vector
 		if all robots should stop, ids key is omitted from map"
 	 
 	  (let [ids (:ids cmd-map)
-	        my-id-key (:id properties)]
+	        my-id-str (name (:id properties))]
 	    (if ids
 	      ;;if some ids are sent, see if my id is in the list to stop
-	      (if (some (fn [x] (= my-id-key x)) ids)
+	      (if (some (fn [x] (= my-id-str x)) ids)
 	        (reset! drive-vals nil)
 	        "stop command did not have my specific id, no command sent")
 	      ;;if no ids sent, all bots should stop
@@ -150,28 +148,27 @@
 	(defn drive-handler [cmd-map]
 	"the drive command map should look something like this:
 		{:command drive
-		 :ids [robot1 robot2]
+		 :robot1 [v w]
+     :robot2 [v w]
 		 :v v
 		 :w w}
 		if no drive command is sent for a specific robot, its id is omitted from the ids vector
 		if all robots should drive, ids key is omitted from map"
 	 
-	  (let [ids (:ids cmd-map)
-	        v (:v cmd-map)
+	  (let [my-id-key (:id properties)
+	        my-velocity-vals (my-id-key cmd-map) ;my id will be in the map if there is a specific v and w cmd for me
+          v (:v cmd-map) ;v and w will be in map only if all robots should drive at that v and w
 	        w (:w cmd-map)
-	        my-id-key (:id properties)]
-	     (if ids
-		    ;;if some ids are sent, see if my id is in the list to drive
-		     (if (some (fn [x] (= my-id-key x)) ids)
-		       (reset! drive-vals {:v v :w w})
-		       "drive command did not have my specific id, no command sent")
-		     ;;if no ids sent, all bots should drive at v w
-		     (reset! drive-vals {:v v :w w}))))
+	        my-id-str (name (:id properties))]
+	     (if my-velocity-vals
+		     (reset! drive-vals {:v (get my-velocity-vals 0) :w (get my-velocity-vals 1)})
+         (if v 
+           (reset! drive-vals {:v v :w w})))))
 	
 
 	(defn zero-handler [cmd-map]
 	"the zero command map should look something like this:
-		{:command drive
+		{:command zero
 		 :ids [robot1]
 		 :x zero
 		 :y zero}
@@ -183,10 +180,10 @@
 	        x (:x cmd-map)
 	        y (:y cmd-map)
 	        t (:t cmd-map)
-	        my-id-key (:id properties)]
+	        my-id-str (name (:id properties))]
 	     (if ids
 		    ;;if some ids are sent, see if my id is in the list to zero
-		     (if (some (fn [x] (= my-id-key x)) ids)
+		     (if (some (fn [x] (= my-id-str x)) ids)
 	         (reset! zero-map (dissoc cmd-map :command :ids)))
 		    ;;if no ids sent, all bots should zero
 		     (reset! zero-map (dissoc cmd-map :command :ids)))))
@@ -219,6 +216,7 @@
         (.control robot 0 0))
       (Thread/sleep 50);;issue new motor command every 1/20 of a second
       (recur)))
+  
 	(on-pool exec (location-tracker))
   (on-pool exec (motor-controller))
 	(phy/physicloud-instance
