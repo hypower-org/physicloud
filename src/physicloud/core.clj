@@ -36,27 +36,28 @@
         (client-fn client-idx conn-stream))
       (throw (IllegalStateException. (str "Unexpected client, " client-info-map ", tried to connect to the server."))))))
 
-(defn physi-client 
+(defn physi-client
+  "Returns theduplex communication stream for a physicloud client once it is realized."
   [{:keys [host port interval] :or {port 10000 interval 2000}}]
   
   (assert (some? host) "A host IP address must be specified.")  
   
-  (let [c-data {:host host :port port}]
+  (let [client-props {:host host :port port}]
     (d/future 
-      @(d/loop [c (->                         
-                    (d/catch (tcp/client c-data) (fn [e] false))                         
-                    (d/timeout! interval false))]       
+      @(d/loop [client-deferred (->                         
+                                  (d/catch (tcp/client client-props) (fn [e] false))                         
+                                  (d/timeout! interval false))]       
             
           (Thread/sleep interval)          
           (d/chain
-            c
-            (fn [x] 
-              (if x
-                x    
+            client-deferred
+            (fn [client-stream] 
+              (if client-stream
+                client-stream    
                 (do 
                   (println "Connecting to " host " ...")
                   (d/recur (-> 
-                             (d/catch (tcp/client c-data) (fn [e] false)) 
+                             (d/catch (tcp/client client-props) (fn [e] false)) 
                              (d/timeout! interval false)))))))))))
 
 (defn physi-server  
@@ -83,43 +84,42 @@
 (defn- watch-fn   
   [streams accumulation expected] 
   (when (>= (count (keys accumulation)) expected)   
-    ;EW. Do something better than this in the future...
+    ; replace with deferred future?
     (future
       (Thread/sleep 5000)
       (doall (map #(if (s/stream? %) (s/close! %)) streams)))))
 
 (defn elect-leader 
-  
-  "Creates a UDP network to elect a leader.  Returns the leader and respondents [leader respondents]"
-  
+  "Creates a UDP network to elect a leader.  Returns the leader and respondents [leader respondents]."
   [ip number-of-neighbors {:keys [udp-duration udp-interval udp-port] :or {udp-duration 5000 udp-interval 1000 udp-port 8999}}]
   
   (let [leader (atom nil)
         
-        socket @(udp/socket {:port udp-port :broadcast? true})
+        udp-socket @(udp/socket {:port udp-port :broadcast? true})
         
         respondents (atom [])
         
-        msg {:message (nippy/freeze [(util/cpu-units) ip]) :port udp-port 
-             :host (let [split (butlast (clojure.string/split ip #"\."))]
-                     (str (clojure.string/join (interleave split (repeat (count split) "."))) "255"))}
+        udp-msg {:message (nippy/freeze [(util/cpu-units) ip]) :port udp-port 
+                 :host (let [split (butlast (clojure.string/split ip #"\."))]
+                         (str (clojure.string/join (interleave split (repeat (count split) "."))) "255"))}
         
-        system (assemble-phy
+        udp-discovery (assemble-phy
                 
-                 (w/vertex :broadcast [] (fn [] (s/periodically udp-interval (fn [] msg))))
+                 (w/vertex :broadcast [] (fn [] (s/periodically udp-interval (fn [] udp-msg))))
                 
-                 (w/vertex :connect [:broadcast] (fn [stream] (s/connect stream socket)))
+                 (w/vertex :connect [:broadcast] (fn [stream] (s/connect stream udp-socket)))
                          
-                 (w/vertex :socket [] (fn [] (s/map (fn [x] (hash-map (:host x) x)) socket)))
+                 (w/vertex :udp-socket [] (fn [] (s/map (fn [msg] (hash-map (:host msg) msg)) udp-socket)))
                 
-                 (w/vertex :result [:socket] (fn [x] (s/reduce merge (util/clone x))))
+                 (w/vertex :result [:udp-socket] (fn [x] (s/reduce merge (util/clone x))))
                 
-                 (w/vertex :accumulator [:accumulator :socket]                                 
+                 (w/vertex :accumulator [:accumulator :udp-socket]                                 
                                  (fn 
                                    ([] {})
                                    ([& streams] (s/map acc-fn (apply s/zip streams)))))
                            
-                 (w/vertex :watch [:accumulator [:all :without [:watch]]] (fn [stream & streams] (s/consume #(watch-fn streams % number-of-neighbors) (s/map identity stream)))))]
+                 (w/vertex :watch [:accumulator [:all :without [:watch]]] (fn [stream & streams] (s/consume #(watch-fn streams % number-of-neighbors) 
+                                                                                                            (s/map identity stream)))))]
     
     (reduce (fn [max [k v]]  
               (let [[v' l'] (defrost (:message v))]
@@ -130,23 +130,23 @@
                      v')
                    max)))            
             -1            
-            @(apply w/output :result system))
+            @(apply w/output :result udp-discovery))
     [@leader (distinct @respondents)]))      
 
 (defn find-first
   [pred coll] 
   (first (filter pred coll)))
 
-;Check to see if network is still cyclic...
+; unnecessary
+;(defn cleanup 
+;  [system]
+;  ((:server (::cleanup system))))
 
-(defn cleanup 
-  [system]
-  ((:server (::cleanup system))))
-
-
-(def server-sys (atom {}))
+(def ^:private server-sys (atom {}))
 
 (defn cpu 
+  "This function launches a cyber-physical unit system. This includes all udp discovery and tcp communication. It also invokes
+the watershed library to automatically connect resources across the physicloud instance."
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :or {port 10000} :as opts}]
   {:pre [(some? requires) (some? provides) (some? neighbors)]}
   
