@@ -1,4 +1,4 @@
-(defproject hypower-org/physicloud "0.2.0-SNAPSHOT"
+(defproject hypower-org/physicloud "0.2.0"
   :description "A platform for programming and managing cyber-physical systems (CPS)."
   :url "http://github.com/hypower-org/physicloud"
   :license {:name "Eclipse Public License"
