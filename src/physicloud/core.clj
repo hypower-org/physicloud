@@ -32,7 +32,7 @@
   (let [client-idx (.indexOf clients (:remote-addr client-info-map))]
     (if (> client-idx -1)
       (do
-        (println "Client: " client-info-map " connected.")
+        (util/pc-println "Client: " client-info-map " connected.")
         (client-fn client-idx conn-stream))
       (throw (IllegalStateException. (str "Unexpected client, " client-info-map ", tried to connect to the server."))))))
 
@@ -55,7 +55,7 @@
               (if client-stream
                 client-stream    
                 (do 
-                  (println "Connecting to " host " ...")
+                  (util/pc-println "Connecting to " host " ...")
                   (d/recur (-> 
                              (d/catch (tcp/client client-props) (fn [e] false)) 
                              (d/timeout! interval false)))))))))))
@@ -118,8 +118,8 @@
                                    ([] {})
                                    ([& streams] (s/map acc-fn (apply s/zip streams)))))
                            
-                 (w/vertex :watch [:accumulator [:all :without [:watch]]] (fn [stream & streams] (s/consume #(watch-fn streams % number-of-neighbors) 
-                                                                                                            (s/map identity stream)))))]
+                 (w/vertex :watch [:accumulator [:all :without [:watch]]] (fn [accum-stream & streams] (s/consume #(watch-fn streams % number-of-neighbors) 
+                                                                                                                  (s/map identity accum-stream)))))]
     
     (reduce (fn [max [k v]]  
               (let [[v' l'] (defrost (:message v))]
@@ -146,13 +146,13 @@
 
 (defn cpu 
   "This function launches a cyber-physical unit system. This includes all udp discovery and tcp communication. It also invokes
-the watershed library to automatically connect resources across the physicloud instance."
+  the watershed library to automatically connect resources across the physicloud instance."
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :or {port 10000} :as opts}]
   {:pre [(some? requires) (some? provides) (some? neighbors)]}
   
   (let [[leader respondents] (elect-leader ip neighbors opts) 
         
-        ps (println "respondents: "respondents)
+        ps (util/pc-println "respondents: "respondents)
         
         client (physi-client {:host leader :port port})
         
@@ -167,7 +167,7 @@ the watershed library to automatically connect resources across the physicloud i
       (let [woserver (dissoc server-info-map ::cleanup)        
             cs (keys woserver)
             ss (vals woserver)]        
-        (println ip " starting up server.")  
+        (util/pc-println ip " starting up server.")  
         (reset! server-sys 
                 @(d/chain'
                         (apply d/zip (map s/take! ss))
@@ -227,7 +227,7 @@ the watershed library to automatically connect resources across the physicloud i
                             ;generate dependencies!
                      
                             (apply assemble-phy sys)))))
-        (println "Server constructed.")
+        (util/pc-println "Server constructed.")
         ;#### Let all the clients know that everything is connected
         
         (doseq [c cs]
@@ -238,7 +238,7 @@ the watershed library to automatically connect resources across the physicloud i
       
       ;#### Block until server is properly initialized ####
       
-      (println (decode-msg @(s/take! client))))
+      (util/pc-println (decode-msg @(s/take! client))))
     
     ; Construct the rest of the system and store structures into a map: {:client ... :system ...}
     (-> 
@@ -289,7 +289,7 @@ the watershed library to automatically connect resources across the physicloud i
                                                                   (let [[sndr msg] packet]
                                                                     (if (= sndr :heartbeat)                                                                   
                                                                       (do
-                                                                        (println "Got heartbeat from " msg ", on server!")
+                                                                        (util/pc-println "Got heartbeat from " msg ", on server!")
                                                                         [(keyword (str "heartbeat-received-" msg))])))) stream))                               
                                          :data-out)]
                              [])
@@ -307,7 +307,7 @@ the watershed library to automatically connect resources across the physicloud i
                                                      (let [[sndr] packet]
                                                        (if (= sndr rec-id)                                                                   
                                                          (do
-                                                           (println "Got heartbeat on client!")
+                                                           (util/pc-println "Got heartbeat on client!")
                                                            status-map)))) 
                                                    stream)))
                               
@@ -346,8 +346,10 @@ the watershed library to automatically connect resources across the physicloud i
                                        (s/connect-via s (fn [x] (s/put! client (encode-msg x))) client)))))))))))
 
 (defn physicloud-instance
-  [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 
-  (println "starting instance...")
+  [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port output-preference] :or {output-preference 1} :as opts} & tasks] 
+  (util/initialize-printer (:output-preference opts))
+  (util/pc-println "starting instance...")
+
   (loop [t-sys (cpu opts)
          
          sys (:system t-sys)
@@ -357,7 +359,7 @@ the watershed library to automatically connect resources across the physicloud i
     (let [status (find-first #(= (:title %) :system-status) c-sys)]      
       
       (when (and status (= (:connection-status @(:output status)) ::disconnected))
-        (println "Connection lost!  Reconnecting...")
+        (util/pc-println "Connection lost!  Reconnecting...")
         (let [t-sys (cpu opts)              
               sys (:system t-sys)]                 
           (recur t-sys          

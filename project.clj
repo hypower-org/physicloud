@@ -10,5 +10,8 @@
                  [com.taoensso/nippy "2.7.0"]
                  [byte-streams "0.2.0-alpha4"]
                  [gloss "0.2.4"]
-                 [org.clojure/data.int-map "0.1.0"]])
+                 [org.clojure/data.int-map "0.1.0"]
+                 [seesaw "1.4.5"]
+                 [pcc "1.0.0"];pcconsole
+                 ]) 
  

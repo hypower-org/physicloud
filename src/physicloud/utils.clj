@@ -2,7 +2,13 @@
   (:require [manifold.stream :as s]
             [manifold.deferred :as d]
             [clojure.data.int-map :as i]
-            [clojure.java.shell :as shell]))
+            [clojure.java.shell :as shell])
+  (:use [seesaw.core]
+        [seesaw.color]
+        [seesaw.font]
+        [seesaw.widgets.log-window])
+  (:import [java.io  PrintStream]
+           [edu.gatech.hypower PhysicloudConsoleStream]))
 
 (defn manifold-step 
   ([] (s/stream))
@@ -137,3 +143,95 @@ In the future this function may contain other information about the computing un
                          :else (list 1 1 1))] ; For non-supported os, returns 1.
     
     (* (first result) (last result))))
+
+(def lw (log-window :id :log-window :limit nil))
+
+(defn make-frame []
+  (show!
+    (frame
+      :title "Physicloud Console"
+      :size [500 :by 300]
+      :content (border-panel
+                 :center (scrollable lw))))
+  (def pccs (PhysicloudConsoleStream. lw))
+	(java.lang.System/setOut (PrintStream. pccs))
+	(java.lang.System/setErr (PrintStream. pccs))
+	(.println java.lang.System/out "Physicloud Console initialized!"))
+
+(defn make-wait-frame []
+  (let [frame (frame :title "PhysiCloud Notification"
+                     :minimum-size [200 :by 100]
+                     :content  (label :text "Please wait while physicloud network is established..."
+                                      :font (font :name :sans-serif :style :bold :size 14)
+                                      :background java.awt.Color/LIGHT_GRAY)
+                     :visible?  true
+                     :on-close :nothing)]
+    (pack! frame)
+    (show! frame)
+    frame))
+
+(defn build-console []
+  (let [log (log-window :id :log-window :limit nil)
+        frame (frame
+                :title "Physicloud Console"
+                :size [500 :by 300]
+                :content (border-panel
+                           :center (scrollable log)))
+        pccs (PhysicloudConsoleStream. log)]
+    (java.lang.System/setOut (PrintStream. pccs))
+    (java.lang.System/setErr (PrintStream. pccs))
+    (.println java.lang.System/out "Physicloud Console initialized!")
+    (show! frame)))
+
+
+(defn initialize-printer[preference]
+  (def output-preference (atom preference))
+  (cond
+    (= 1 preference)
+    (let [date (java.util.Date.)
+          filename (str "pc-log-"(reduce 
+                                  (fn [coll val] (if (or (= val \space) (= val \:))
+                                                   (str coll "-")
+                                                   (str coll val)))
+                                  "" 
+                                  (.toString date)))]
+      (spit filename (str "PHYSICLOUD LOG FILE FOR " date ":\n"))
+      (def filename filename))
+    
+    (= 2 preference)
+    (build-console)
+    
+    :else 
+    "using normal println"))
+
+(declare output-preference)
+(declare filename)
+(defn pc-println [& args]
+  "print to either log (1), pcconsole(2), or *out*(3)"
+  (cond 
+    (= 1 @output-preference)
+    (spit filename (str (apply str args) "\n") :append true)
+    
+    (= 2 @output-preference)
+    (.println java.lang.System/out (apply str args))
+    
+    (= 3 @output-preference)
+    (println (apply str args))))
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
