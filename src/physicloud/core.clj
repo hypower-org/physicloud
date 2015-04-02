@@ -152,7 +152,7 @@
   
   (let [[leader respondents] (elect-leader ip neighbors opts) 
         
-        ps (util/pc-println "respondents: "respondents)
+        ps (util/pc-println "Respondents: "respondents)
         
         client (physi-client {:host leader :port port})
         
@@ -167,7 +167,7 @@
       (let [woserver (dissoc server-info-map ::cleanup)        
             cs (keys woserver)
             ss (vals woserver)]        
-        (util/pc-println ip " starting up server.")  
+        (util/pc-println ip " Starting up PhysiCloud server.")  
         (reset! server-sys 
                 @(d/chain'
                         (apply d/zip (map s/take! ss))
@@ -347,8 +347,11 @@
 
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port output-preference] :or {output-preference 1} :as opts} & tasks] 
-  (util/initialize-printer (:output-preference opts))
-  (util/pc-println "starting instance...")
+  
+  (if-not (= 2 (:output-preference opts))
+    (util/initialize-printer (:output-preference opts)));;assume printer was already initialized if output-preference = 2
+  
+  (util/pc-println "Starting PhysiCloud instance...")
 
   (loop [t-sys (cpu opts)
          

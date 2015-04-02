@@ -180,7 +180,7 @@ In the future this function may contain other information about the computing un
         pccs (PhysicloudConsoleStream. log)]
     (java.lang.System/setOut (PrintStream. pccs))
     (java.lang.System/setErr (PrintStream. pccs))
-    (.println java.lang.System/out "Physicloud Console initialized!")
+    (.println java.lang.System/out "PhysiCloud Console initialized!")
     (show! frame)))
 
 
