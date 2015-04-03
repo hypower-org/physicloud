@@ -181,6 +181,7 @@ In the future this function may contain other information about the computing un
     (java.lang.System/setOut (PrintStream. pccs))
     (java.lang.System/setErr (PrintStream. pccs))
     (.println java.lang.System/out "PhysiCloud Console initialized!")
+    (.setLocation frame 300 300)
     (show! frame)))
 
 
