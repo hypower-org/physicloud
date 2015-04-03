@@ -348,8 +348,7 @@
 (defn physicloud-instance
   [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port output-preference] :or {output-preference 1} :as opts} & tasks] 
   
-  (if-not (= 2 (:output-preference opts))
-    (util/initialize-printer (:output-preference opts)));;assume printer was already initialized if output-preference = 2
+  (util/initialize-printer output-preference)
   
   (util/pc-println "Starting PhysiCloud instance...")
 

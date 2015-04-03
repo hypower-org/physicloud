@@ -12,4 +12,6 @@
     {:ip ip
      :neighbors neighbors
      :requires [] 
-     :provides []}))
+     :provides []
+     :output-preference 2}
+     ))
