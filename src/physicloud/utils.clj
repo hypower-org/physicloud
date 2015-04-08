@@ -141,34 +141,8 @@ In the future this function may contain other information about the computing un
                                                     proc-speed(read-string(re-find #"\d+" (:out (shell/sh "cmd" "/C" "wmic" "cpu" "get" "CurrentClockSpeed"))))]
                                                 (list proc-speed -1 num-cores))
                          :else (list 1 1 1))] ; For non-supported os, returns 1.
-    
     (* (first result) (last result))))
 
-(def lw (log-window :id :log-window :limit nil))
-
-(defn make-frame []
-  (show!
-    (frame
-      :title "Physicloud Console"
-      :size [500 :by 300]
-      :content (border-panel
-                 :center (scrollable lw))))
-  (def pccs (PhysicloudConsoleStream. lw))
-	(java.lang.System/setOut (PrintStream. pccs))
-	(java.lang.System/setErr (PrintStream. pccs))
-	(.println java.lang.System/out "Physicloud Console initialized!"))
-
-(defn make-wait-frame []
-  (let [frame (frame :title "PhysiCloud Notification"
-                     :minimum-size [200 :by 100]
-                     :content  (label :text "Please wait while physicloud network is established..."
-                                      :font (font :name :sans-serif :style :bold :size 14)
-                                      :background java.awt.Color/LIGHT_GRAY)
-                     :visible?  true
-                     :on-close :nothing)]
-    (pack! frame)
-    (show! frame)
-    frame))
 
 (defn build-console []
   (let [log (log-window :id :log-window :limit nil)
