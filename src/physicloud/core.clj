@@ -32,7 +32,7 @@
   (let [client-idx (.indexOf clients (:remote-addr client-info-map))]
     (if (> client-idx -1)
       (do
-        (util/pc-println "Client: " client-info-map " connected.")
+        (println "Client: " client-info-map " connected.")
         (client-fn client-idx conn-stream))
       (throw (IllegalStateException. (str "Unexpected client, " client-info-map ", tried to connect to the server."))))))
 
@@ -55,7 +55,7 @@
               (if client-stream
                 client-stream    
                 (do 
-                  (util/pc-println "Connecting to " host " ...")
+                  (println "Connecting to " host " ...")
                   (d/recur (-> 
                              (d/catch (tcp/client client-props) (fn [e] false)) 
                              (d/timeout! interval false)))))))))))
@@ -152,7 +152,7 @@
   
   (let [[leader respondents] (elect-leader ip neighbors opts) 
         
-        ps (util/pc-println "Respondents: "respondents)
+        ps (println "Respondents: "respondents)
         
         client (physi-client {:host leader :port port})
         
@@ -167,7 +167,7 @@
       (let [woserver (dissoc server-info-map ::cleanup)        
             cs (keys woserver)
             ss (vals woserver)]        
-        (util/pc-println ip " Starting up PhysiCloud server.")  
+        (println ip " Starting up PhysiCloud server.")  
         (reset! server-sys 
                 @(d/chain'
                         (apply d/zip (map s/take! ss))
@@ -227,7 +227,7 @@
                             ;generate dependencies!
                      
                             (apply assemble-phy sys)))))
-        (util/pc-println "Server constructed.")
+        (println "Server constructed.")
         ;#### Let all the clients know that everything is connected
         
         (doseq [c cs]
@@ -238,7 +238,7 @@
       
       ;#### Block until server is properly initialized ####
       
-      (util/pc-println (decode-msg @(s/take! client))))
+      (println (decode-msg @(s/take! client))))
     
     ; Construct the rest of the system and store structures into a map: {:client ... :system ...}
     (-> 
@@ -289,7 +289,7 @@
                                                                   (let [[sndr msg] packet]
                                                                     (if (= sndr :heartbeat)                                                                   
                                                                       (do
-                                                                        (util/pc-println "Got heartbeat from " msg ", on server!")
+                                                                        (println "Got heartbeat from " msg ", on server!")
                                                                         [(keyword (str "heartbeat-received-" msg))])))) stream))                               
                                          :data-out)]
                              [])
@@ -307,7 +307,7 @@
                                                      (let [[sndr] packet]
                                                        (if (= sndr rec-id)                                                                   
                                                          (do
-                                                           (util/pc-println "Got heartbeat on client!")
+                                                           (println "Got heartbeat on client!")
                                                            status-map)))) 
                                                    stream)))
                               
@@ -346,11 +346,7 @@
                                        (s/connect-via s (fn [x] (s/put! client (encode-msg x))) client)))))))))))
 
 (defn physicloud-instance
-  [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port output-preference] :or {output-preference 1} :as opts} & tasks] 
-  
-  (util/initialize-printer output-preference)
-  
-  (util/pc-println "Starting PhysiCloud instance...")
+  [{:keys [requires provides ip port neighbors udp-duration udp-interval udp-port] :as opts} & tasks] 
 
   (loop [t-sys (cpu opts)
          
@@ -361,7 +357,7 @@
     (let [status (find-first #(= (:title %) :system-status) c-sys)]      
       
       (when (and status (= (:connection-status @(:output status)) ::disconnected))
-        (util/pc-println "Connection lost!  Reconnecting...")
+        (println "Connection lost!  Reconnecting...")
         (let [t-sys (cpu opts)              
               sys (:system t-sys)]                 
           (recur t-sys          
